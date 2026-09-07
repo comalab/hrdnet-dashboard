@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+
+# 절대 커밋하면 안 되는 비밀 정보
+.streamlit/secrets.toml
