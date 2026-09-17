@@ -87,6 +87,28 @@ def test_requests():
     return results
 
 
+st.divider()
+st.subheader("🔎 비교 테스트 — Google / Naver / 고용24")
+st.caption("고용24만 막혀 있는지, 이 서버 자체의 아웃바운드 연결이 막혀 있는지 구분합니다.")
+
+if st.button("비교 테스트 시작"):
+    compare_hosts = [
+        ("www.google.com", 443),
+        ("www.naver.com", 443),
+        ("www.work24.go.kr", 443),
+    ]
+    for host, port in compare_hosts:
+        try:
+            start = time.time()
+            s = socket.create_connection((host, port), timeout=10)
+            elapsed = time.time() - start
+            s.close()
+            st.success(f"{host}:{port} → 성공 ({elapsed:.2f}초)")
+        except Exception as e:
+            st.error(f"{host}:{port} → 실패: {e}")
+
+st.divider()
+
 if st.button("🚀 진단 시작", type="primary"):
     st.subheader("1. DNS 확인")
     dns_ok, dns_msg = test_dns()
