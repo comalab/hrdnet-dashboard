@@ -20,21 +20,42 @@ def create_url(keyword: str) -> str:
     kw = quote(keyword)
     return (
         f"https://www.work24.go.kr/hr/a/a/1100/trnnCrsInf.do?"
-        f"dghtSe=A&traingMthCd=A&endDate={_wn_end}&trng_prd=A&pageSize=10"
-        f"&startDate_datepicker={_wn_start_dp}&topMenuYn=&tracseId=AIG20240000470957"
-        f"&totamtSuptYn=A&crseTracseSeNum=&keyword={kw}"
+        f"dghtSe=A&traingMthCd=A"
+        f"&endDate={_wn_end}"
+        f"&trng_prd=A"
+        f"&pageSize=10"
+        f"&startDate_datepicker={_wn_start_dp}"
+        f"&topMenuYn="
+        f"&totamtSuptYn=A"
+        f"&crseTracseSeNum="
+        f"&keyword={kw}"
         f"&area=26230%7C%EB%B6%80%EC%82%B0+%EB%B6%80%EC%82%B0%EC%A7%84%EA%B5%AC"
-        f"&orderKey=2&kdgLinkYn=&srchType=all_type"
+        f"&orderKey=2"
+        f"&kdgLinkYn="
+        f"&srchType=all_type"
         f"&crseTracseSe=A%7C%ED%9B%88%EB%A0%A8%EC%9C%A0%ED%98%95+%EC%A0%84%EC%B2%B4"
-        f"&tranRegister=&trng_type=A&mberId=&pageId=2&noTrngPay=Y"
-        f"&endDate_datepicker={_wn_end_dp}&monthGubun=&pageOrder=2ASC"
-        f"&startTrngPay=&startDate={_wn_start}&endTrngPay=&tracseTme=5"
-        f"&keyword1=&keyword2=&orderBy=ASC&currentTab=2&pop=&pageRow=10"
-        f"&ncsSearchKeyword=&keywordTrngNm=&keywordType=1&gb=&kDgtlYn=&mberSe="
-        f"&max_trng=&totTraingTime=A&i2=A&areaSearchKeyword="
-        f"&programMenuIdentification=EBG020000000310&min_trng=&pageIndex=1"
-        f"&chkNoTrngPay=Y&bgrlInstYn=&crseTracseSeKDT=&ncs=&gvrnInstt="
-        f"&selectNCSKeyword=&compareArgArr=&action=trnnCrsInfPost.do"
+        f"&tranRegister="
+        f"&trng_type=A"
+        f"&mberId="
+        f"&pageId=2"
+        f"&noTrngPay=Y"
+        f"&endDate_datepicker={_wn_end_dp}"
+        f"&monthGubun="
+        f"&pageOrder=2ASC"
+        f"&startTrngPay="
+        f"&startDate={_wn_start}"
+        f"&endTrngPay="
+        f"&keyword1="
+        f"&keyword2="
+        f"&orderBy=ASC"
+        f"&currentTab=2"
+        f"&pageRow=10"
+        f"&keywordType=1"
+        f"&totTraingTime=A"
+        f"&programMenuIdentification=EBG020000000310"
+        f"&pageIndex=1"
+        f"&chkNoTrngPay=Y"
+        f"&action=trnnCrsInfPost.do"
     )
 
 
@@ -49,18 +70,30 @@ def crawl_courses(keyword: str) -> list:
     url = create_url(keyword)
     headers = {
         "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/152.0.0.0 Safari/537.36"
-    ),
-    "Referer": "https://www.work24.go.kr/",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/152.0.0.0 Safari/537.36"
+        ),
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;"
+            "q=0.9,image/avif,image/webp,*/*;q=0.8"
+        ),
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        "Referer": "https://www.work24.go.kr/",
     }
     data = []
     try:
-        res = requests.get(url, headers=headers, timeout=10)
-        res.raise_for_status()
-        res.encoding = "utf-8"
-        soup = BeautifulSoup(res.text, "html.parser")
+        with requests.Session() as session:
+            session.headers.update(headers)
+
+            # 고용24 첫 접속 → 쿠키/세션 생성
+            session.get("https://www.work24.go.kr/", timeout=(20, 60))
+
+            # 실제 검색
+            res = session.get(url, timeout=(20, 60))
+            res.raise_for_status()
+            res.encoding = "utf-8"
+            soup = BeautifulSoup(res.text, "html.parser")
         for c in soup.select("div.list[data-tracseid]"):
             inst = c.select_one("div.company_title a")
             title = c.select_one("h3.t3_sb a")
