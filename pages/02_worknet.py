@@ -48,7 +48,12 @@ COURSE_TYPE_TAGS = {
 def crawl_courses(keyword: str) -> list:
     url = create_url(keyword)
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/152.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.work24.go.kr/",
     }
     data = []
     try:
