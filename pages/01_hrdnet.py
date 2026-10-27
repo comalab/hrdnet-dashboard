@@ -1339,7 +1339,7 @@ if search_btn:
                     df[col] = pd.to_datetime(df[col], errors="coerce").dt.strftime("%Y-%m-%d")
 
             # 숫자 컬럼 변환
-            for col in ["수강비", "실제훈련비", "정원", "수강신청인원"]:
+            for col in ["수강비", "실제훈련비", "정원", "등록인원"]:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -1386,19 +1386,19 @@ if df is not None and not df.empty:
     tab1, tab2= st.tabs(["🏫 훈련기관 TOP 10", "🗂️ 직종별 분포"])
     with tab1:
         top_organs = (
-            df.groupby("훈련기관명")["수강신청인원"]
+            df.groupby("훈련기관명")["등록인원"]
             .sum()
             .reset_index()
-            .rename(columns={"수강신청인원": "수강신청인원 합계"})
-            .sort_values("수강신청인원 합계", ascending=False)
+            .rename(columns={"등록인원": "등록인원 합계"})
+            .sort_values("등록인원 합계", ascending=False)
             .head(10)
         )
         fig2 = px.bar(
-            top_organs.sort_values("수강신청인원 합계"),
-            x="수강신청인원 합계", y="훈련기관명", orientation="h",
-            text="수강신청인원 합계", color="수강신청인원 합계",
+            top_organs.sort_values("등록인원 합계"),
+            x="등록인원 합계", y="훈련기관명", orientation="h",
+            text="등록인원 합계", color="등록인원 합계",
             color_continuous_scale="Teal",
-            title="훈련기관별 수강신청인원 합계 TOP 10",
+            title="훈련기관별 등록인원 합계 TOP 10",
         )
         fig2.update_traces(textposition="outside")
         fig2.update_layout(showlegend=False, height=420)
@@ -1408,24 +1408,24 @@ if df is not None and not df.empty:
         if "직종명" in df.columns:
             job_df = (
                 df[df["직종명"] != ""]
-                .groupby("직종명")["수강신청인원"]
+                .groupby("직종명")["등록인원"]
                 .sum()
                 .reset_index()
-                .rename(columns={"수강신청인원": "수강신청인원 합계"})
-                .sort_values("수강신청인원 합계", ascending=False)
+                .rename(columns={"등록인원": "등록인원 합계"})
+                .sort_values("등록인원 합계", ascending=False)
                 .head(15)
             )
             
             if not job_df.empty:
                 fig4 = px.bar(
-                    job_df.sort_values("수강신청인원 합계"),
-                    x="수강신청인원 합계",
+                    job_df.sort_values("등록인원 합계"),
+                    x="등록인원 합계",
                     y="직종명",
                     orientation="h",
-                    text="수강신청인원 합계",
-                    color="수강신청인원 합계",
+                    text="등록인원 합계",
+                    color="등록인원 합계",
                     color_continuous_scale="Purples",
-                    title="직종별 수강신청인원 합계 TOP 15",
+                    title="직종별 등록인원 합계 TOP 15",
                 )
                 fig4.update_traces(textposition="outside")
                 fig4.update_layout(showlegend=False, height=500)
@@ -1498,7 +1498,7 @@ if df is not None and not df.empty:
     display_columns = [
         "훈련기관명", "과정명", "회차", "훈련유형",
         "직종명",          # ← NCS코드 대신 직종명
-        "훈련시작일", "훈련종료일", "수강신청인원", "주소","과정링크", "만족도점수",
+        "훈련시작일", "훈련종료일", "등록인원", "주소","과정링크", "만족도점수",
         "수강비", "실제훈련비", "정원", 
          "전화번호", 
     ]
@@ -1514,7 +1514,7 @@ if df is not None and not df.empty:
             "수강비": st.column_config.NumberColumn("수강비", format="%,d 원"),
             "실제훈련비": st.column_config.NumberColumn("실제훈련비", format="%,d 원"),
             "정원": st.column_config.NumberColumn("정원", format="%d 명"),
-            "수강신청인원": st.column_config.NumberColumn("수강신청인원", format="%d 명"),
+            "등록인원": st.column_config.NumberColumn("등록인원", format="%d 명"),
             "과정링크": st.column_config.LinkColumn("과정링크", display_text="링크"),
         },
     )

@@ -42,6 +42,7 @@ if not check_password():
 pg = st.navigation([
     st.Page("pages/01_hrdnet.py",  title="HRD-Net 대시보드",   icon="🎓"),
     st.Page("pages/02_worknet.py", title="고용24 키워드 검색", icon="🔍"),
+    st.Page("pages/03_management_beta.py", title="경영 전략 대시보드 (베타)", icon="📊"),
     st.Page("pages/99_diagnostic.py", title="연결 진단(임시)", icon="🔧"),
 ])
 pg.run()

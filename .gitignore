@@ -4,3 +4,5 @@ __pycache__/
 
 # 절대 커밋하면 안 되는 비밀 정보
 .streamlit/secrets.toml
+관리자비밀번호.txt
+*.pem

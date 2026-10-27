@@ -73,7 +73,7 @@ class HRDNetCrawler:
                         "수강비": self._get_text(course, "courseMan"),
                         "실제훈련비": self._get_text(course, "realMan"),
                         "정원": self._get_text(course, "yardMan"),
-                        "수강신청인원": self._get_text(course, "regCourseMan"),
+                        "등록인원": self._get_text(course, "regCourseMan"),
                         "주소": self._get_text(course, "address"),
                         "전화번호": self._get_text(course, "telNo"),
                         "만족도점수": self._get_text(course, "stdgScor"),
