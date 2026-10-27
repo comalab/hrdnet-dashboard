@@ -1,3 +1,4 @@
+import calendar
 from datetime import date, datetime, timedelta
 from io import BytesIO
 import os
@@ -40,6 +41,101 @@ st.markdown(
         vertical-align: middle;
         margin-left: 0.5rem;
     }
+    /* 달력 그리드 스타일 */
+    .cal-container {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #ffffff;
+        margin-top: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+    }
+    .cal-header-row {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        text-align: center;
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: #475569;
+    }
+    .cal-header-cell {
+        padding: 10px 0;
+    }
+    .cal-header-sun { color: #ef4444; }
+    .cal-header-sat { color: #3b82f6; }
+    .cal-grid-row {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .cal-cell {
+        min-height: 125px;
+        max-height: 175px;
+        overflow-y: auto;
+        padding: 6px;
+        border-right: 1px solid #f1f5f9;
+        background: #ffffff;
+        transition: background 0.15s ease;
+    }
+    .cal-cell:last-child {
+        border-right: none;
+    }
+    .cal-cell-empty {
+        background: #fcfdfe;
+        min-height: 125px;
+        border-right: 1px solid #f1f5f9;
+    }
+    .cal-cell-today {
+        background: #f0fdf4 !important;
+        border: 2px solid #22c55e !important;
+    }
+    .cal-day-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+        padding-bottom: 2px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .cal-day-num {
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: #334155;
+    }
+    .cal-day-badge-cnt {
+        font-size: 0.72rem;
+        font-weight: 700;
+        background: #e2e8f0;
+        color: #475569;
+        padding: 1px 5px;
+        border-radius: 9999px;
+    }
+    .cal-pill {
+        border-radius: 4px;
+        padding: 2px 5px;
+        font-size: 0.72rem;
+        line-height: 1.35;
+        margin-bottom: 3px;
+        display: block;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+        border-left: 3px solid;
+    }
+    .cal-pill-conflict {
+        background: #fef2f2;
+        color: #b91c1c;
+        border: 1px dashed #f87171;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 4px;
+        border-radius: 4px;
+        margin-bottom: 3px;
+        text-align: center;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -50,24 +146,72 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="bi-subheader">실제 등록 인원수 중심의 시장 규모, 직종별 수요 볼륨, 개강 완료 실적 및 예상 매출 분석</div>',
+    '<div class="bi-subheader">실제 등록 인원수 중심의 시장 규모, 학원별 복수 선택 비교, 개강일정 캘린더 및 빈집털이 전략 분석</div>',
     unsafe_allow_html=True,
 )
 
 
 # ─────────────────────────────────────────────
+# 기관명 단축 및 캘린더 뱃지 색상 매핑
+# ─────────────────────────────────────────────
+INST_MAP = {
+    "미토직업전문학교": "미토",
+    "양정인력개발센터": "양정",
+    "부산예일직업전문학교": "예일",
+    "미래창조평생교육원": "미창",
+    "정연화의료서비스아카데미전문학원": "정연화",
+    "그린컴퓨터아카데미 부산": "그린",
+    "동성인재개발교육원": "동성",
+    "성심미용예술직업전문학교": "성심",
+    "엠아카데미컴퓨터아트학원": "엠아",
+}
+
+
+def get_short_inst_name(full_name: str) -> str:
+    if not full_name:
+        return ""
+    for k, v in INST_MAP.items():
+        if k in full_name:
+            return v
+    clean = (
+        full_name.replace("직업전문학교", "")
+        .replace("아카데미", "")
+        .replace("인재개발원", "")
+        .replace("교육원", "")
+        .strip()
+    )
+    return clean[:4] if clean else full_name[:4]
+
+
+def get_organ_badge_style(organ_name: str) -> dict:
+    tag = get_short_inst_name(organ_name)
+    if "미토" in organ_name:
+        return {"bg": "#dcfce7", "text": "#166534", "border": "#22c55e", "tag": tag}
+    elif "양정" in organ_name:
+        return {"bg": "#dbeafe", "text": "#1e40af", "border": "#3b82f6", "tag": tag}
+    elif "예일" in organ_name:
+        return {"bg": "#f3e8ff", "text": "#6b21a8", "border": "#a855f7", "tag": tag}
+    elif "그린" in organ_name:
+        return {"bg": "#ffedd5", "text": "#9a3412", "border": "#f97316", "tag": tag}
+    elif "동성" in organ_name:
+        return {"bg": "#fce7f3", "text": "#9d174d", "border": "#ec4899", "tag": tag}
+    elif "미래" in organ_name or "미창" in organ_name:
+        return {"bg": "#ccfbf1", "text": "#115e59", "border": "#14b8a6", "tag": tag}
+    elif "정연화" in organ_name:
+        return {"bg": "#fef9c3", "text": "#854d0e", "border": "#eab308", "tag": tag}
+    else:
+        return {"bg": "#f1f5f9", "text": "#334155", "border": "#64748b", "tag": tag}
+
+
+# ─────────────────────────────────────────────
 # 데이터 정제 및 파생변수 생성 함수
-# (오늘 포함 과거 실적 & 절대 인원수 중심)
 # ─────────────────────────────────────────────
 def prepare_bi_data(raw_df: pd.DataFrame) -> pd.DataFrame:
-    """실제 등록인원수와 매출 중심의 지표 계산"""
     df = raw_df.copy()
 
-    # 구버전 컬럼명 호환
     if "수강신청인원" in df.columns and "등록인원" not in df.columns:
         df["등록인원"] = df["수강신청인원"]
 
-    # 필수 컬럼 기본값 처리
     if "등록인원" not in df.columns:
         df["등록인원"] = 0
     if "실제훈련비" not in df.columns:
@@ -79,19 +223,18 @@ def prepare_bi_data(raw_df: pd.DataFrame) -> pd.DataFrame:
     if "직종명" not in df.columns:
         df["직종명"] = "기타직종"
 
-    # 수치형 변환
     df["등록인원"] = pd.to_numeric(df["등록인원"], errors="coerce").fillna(0).astype(int)
     df["실제훈련비"] = pd.to_numeric(df["실제훈련비"], errors="coerce").fillna(0)
     df["수강비"] = pd.to_numeric(df["수강비"], errors="coerce").fillna(0)
     df["만족도점수"] = pd.to_numeric(df["만족도점수"], errors="coerce").fillna(0.0)
 
-    # 1. 예상 매출 (실제 등록인원 × 1인당 실제훈련비)
     df["예상매출"] = df["등록인원"] * df["실제훈련비"]
 
-    # 2. 날짜 및 개강월 계산
     today = date.today()
     df["시작일_dt"] = pd.to_datetime(df["훈련시작일"], errors="coerce")
+    df["종료일_dt"] = pd.to_datetime(df["훈련종료일"], errors="coerce")
     df["개강월"] = df["시작일_dt"].dt.strftime("%Y-%m")
+    df["개강일자"] = df["시작일_dt"].dt.strftime("%Y-%m-%d")
 
     def calc_dday(dt):
         if pd.isna(dt):
@@ -100,7 +243,6 @@ def prepare_bi_data(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     df["D-Day"] = df["시작일_dt"].apply(calc_dday)
 
-    # 3. 절대 인원수 기반 개강 실적 구분
     def classify_headcount_status(reg_count):
         if reg_count >= 12:
             return "🟢 안정권 (12명 이상)"
@@ -112,6 +254,7 @@ def prepare_bi_data(raw_df: pd.DataFrame) -> pd.DataFrame:
             return "⚪ 미등록 (0명)"
 
     df["인원구분"] = [classify_headcount_status(r) for r in df["등록인원"]]
+    df["기관약칭"] = [get_short_inst_name(o) for o in df["훈련기관명"]]
 
     return df
 
@@ -132,7 +275,7 @@ if "bi_df" not in st.session_state:
     st.session_state.bi_df = None
 
 # ─────────────────────────────────────────────
-# 사이드바: 1) 검색 조건 (오늘 포함 과거 데이터 전용)
+# 사이드바: 1) 과거 실적 검색 조건
 # ─────────────────────────────────────────────
 with st.sidebar:
     st.header("🔍 HRD-Net 과거 실적 검색")
@@ -257,28 +400,26 @@ if search_btn:
         if courses:
             new_df = pd.DataFrame(courses)
 
-            # 날짜 컬럼 정리
             for col in ["훈련시작일", "훈련종료일"]:
                 if col in new_df.columns:
                     new_df[col] = pd.to_datetime(new_df[col], errors="coerce").dt.strftime("%Y-%m-%d")
 
-            # ★ 오늘 포함 과거 데이터만 엄격하게 필터링 (미래 미개강 과정 제외) ★
             new_df["_start_date_obj"] = pd.to_datetime(new_df["훈련시작일"], errors="coerce").dt.date
             new_df = new_df[new_df["_start_date_obj"] <= end_date_input].drop(columns=["_start_date_obj"])
 
-            # 숫자 컬럼 변환
             for col in ["수강비", "실제훈련비", "정원", "등록인원"]:
                 if col in new_df.columns:
                     new_df[col] = pd.to_numeric(new_df[col], errors="coerce")
 
-            # NCS코드 -> 직종명 매핑
             if "NCS코드" in new_df.columns:
                 new_df["직종명"] = new_df["NCS코드"].apply(map_ncs_code)
 
-            # 세션 공유 (01_hrdnet.py와 양방향 공유)
             st.session_state.df = new_df
             st.session_state.bi_df = prepare_bi_data(new_df)
             st.session_state.current_source = "searched"
+            # 세션 변경 시 선택 학원 초기화
+            if "selected_organs" in st.session_state:
+                del st.session_state["selected_organs"]
             status_box.success(
                 f"✅ 검색 완료! 오늘 이전 개강 과정 총 **{len(new_df):,}건**이 수집되어 분석에 반영되었습니다."
             )
@@ -303,9 +444,7 @@ with source_col1:
     if current_src == "searched":
         st.success(f"🔍 **[과거 실적 검색 완료]** 조회된 **{len(st.session_state.bi_df):,}건**의 개강 실적을 분석 중입니다.")
     elif active_df is not None and not active_df.empty:
-        st.success(
-            f"🔗 **[HRD-Net 대시보드]** 에서 조회된 **{len(active_df):,}건**의 데이터와 연동 중입니다."
-        )
+        st.success(f"🔗 **[HRD-Net 대시보드]** 에서 조회된 **{len(active_df):,}건**의 데이터와 연동 중입니다.")
         if st.session_state.bi_df is None or st.session_state.get("current_source") != "session":
             st.session_state.bi_df = prepare_bi_data(active_df)
             st.session_state.current_source = "session"
@@ -327,6 +466,8 @@ with source_col2:
                     loaded = pd.read_excel(sample_file_path)
                     st.session_state.bi_df = prepare_bi_data(loaded)
                     st.session_state.current_source = "sample_file"
+                    if "selected_organs" in st.session_state:
+                        del st.session_state["selected_organs"]
                     st.toast("기본 데이터가 로드되었습니다!", icon="✅")
                     st.rerun()
                 except Exception as e:
@@ -338,12 +479,13 @@ with source_col2:
                 uploaded_df = pd.read_excel(uploaded_file)
                 st.session_state.bi_df = prepare_bi_data(uploaded_df)
                 st.session_state.current_source = "uploaded"
+                if "selected_organs" in st.session_state:
+                    del st.session_state["selected_organs"]
                 st.toast("업로드된 엑셀 적용 완료!", icon="✅")
                 st.rerun()
             except Exception as e:
                 st.error(f"파싱 실패: {e}")
 
-# 데이터가 아직 없는 경우 기본 저장 파일 자동 로드 시도
 if st.session_state.bi_df is None and os.path.exists(sample_file_path):
     try:
         loaded = pd.read_excel(sample_file_path)
@@ -366,19 +508,17 @@ if df is None or df.empty:
     st.stop()
 
 # ─────────────────────────────────────────────
-# 사이드바 하단: 세부 필터 (0명 제외 및 과거 필터 추가)
+# 사이드바 하단: 학원 복수 선택 필터 및 세부 옵션
 # ─────────────────────────────────────────────
 with st.sidebar:
-    st.header("🎯 인원 분석 필터")
+    st.header("🎯 인원 분석 및 학원 필터")
 
-    # 1. 모집인원 0명 제외 선택 옵션
     exclude_zero = st.toggle(
         "🚫 모집인원 0명 과정 제외",
         value=True,
         help="등록인원이 0명인 과정(미개설/폐강 등)을 제외하고 실제 인원이 모집된 과정만 분석합니다.",
     )
 
-    # 2. 오늘 포함 과거 데이터만 보기 토글 (업로드/샘플 데이터 대비)
     past_only = st.toggle(
         "📅 오늘 이전 개강 과정만 보기",
         value=True,
@@ -388,59 +528,84 @@ with st.sidebar:
     all_organs = sorted(df["훈련기관명"].dropna().unique().tolist())
     is_mito_present = any("미토" in o for o in all_organs)
 
-    # 3. 미토 집중 분석 토글
-    focus_mito = st.toggle("🏫 미토직업전문학교만 집중 분석", value=False) if is_mito_present else False
+    # ── 학원 복수 선택 필터 섹션 ──
+    st.subheader("🏫 훈련기관 선택 (복수 선택)")
 
-    filtered_df = df.copy()
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        if st.button("전체 학원 선택", use_container_width=True):
+            st.session_state.selected_organs = all_organs
+            st.rerun()
+    with col_b2:
+        if is_mito_present:
+            if st.button("미토만 선택", use_container_width=True):
+                st.session_state.selected_organs = [o for o in all_organs if "미토" in o]
+                st.rerun()
 
-    # 필터 적용 1: 과거 개강 과정
-    if past_only:
-        filtered_df = filtered_df[filtered_df["시작일_dt"].dt.date <= date.today()]
+    # 기본 선택값 결정
+    if "selected_organs" not in st.session_state:
+        st.session_state.selected_organs = all_organs
 
-    # 필터 적용 2: 모집인원 0명 제외
-    if exclude_zero:
-        filtered_df = filtered_df[filtered_df["등록인원"] > 0]
+    # 유효한 학원 목록 유지
+    current_defaults = [o for o in st.session_state.selected_organs if o in all_organs]
+    if not current_defaults:
+        current_defaults = all_organs
 
-    # 필터 적용 3: 기관 선택
-    if focus_mito:
-        filtered_df = filtered_df[filtered_df["훈련기관명"].str.contains("미토", na=False)]
-    else:
-        selected_organs = st.multiselect(
-            "훈련기관 필터",
-            options=all_organs,
-            default=[],
-            placeholder="전체 기관",
-        )
-        if selected_organs:
-            filtered_df = filtered_df[filtered_df["훈련기관명"].isin(selected_organs)]
+    selected_organs = st.multiselect(
+        "비교 분석할 학원들을 선택하세요",
+        options=all_organs,
+        default=current_defaults,
+        placeholder="학원을 1개 이상 선택하세요",
+        help="학원을 여러 개 선택하여 개강일정 및 등록 인원을 교차 비교할 수 있습니다.",
+    )
+    st.session_state.selected_organs = selected_organs
 
-    # 필터 적용 4: 직종(NCS)
-    all_jobs = sorted([j for j in filtered_df["직종명"].dropna().unique() if j])
+    # ── 직종 필터 ──
+    all_jobs = sorted([j for j in df["직종명"].dropna().unique() if j])
     selected_jobs = st.multiselect(
         "직종(NCS) 필터",
         options=all_jobs,
         default=[],
         placeholder="전체 직종",
     )
-    if selected_jobs:
-        filtered_df = filtered_df[filtered_df["직종명"].isin(selected_jobs)]
 
-    # 필터 적용 5: 인원수 구간
-    all_statuses = sorted(filtered_df["인원구분"].dropna().unique().tolist())
+    # ── 인원수 구간 필터 ──
+    all_statuses = sorted(df["인원구분"].dropna().unique().tolist())
     selected_statuses = st.multiselect(
         "등록 인원수 구간",
         options=all_statuses,
         default=[],
         placeholder="전체 구간",
     )
-    if selected_statuses:
-        filtered_df = filtered_df[filtered_df["인원구분"].isin(selected_statuses)]
 
+# ─────────────────────────────────────────────
+# 필터 적용 데이터프레임 생성
+# ─────────────────────────────────────────────
+filtered_df = df.copy()
+
+if past_only:
+    filtered_df = filtered_df[filtered_df["시작일_dt"].dt.date <= date.today()]
+
+if exclude_zero:
+    filtered_df = filtered_df[filtered_df["등록인원"] > 0]
+
+if selected_organs:
+    filtered_df = filtered_df[filtered_df["훈련기관명"].isin(selected_organs)]
+else:
+    st.warning("⚠️ 선택된 학원이 없습니다. 좌측 사이드바에서 학원을 1개 이상 선택해 주세요.")
+    st.stop()
+
+if selected_jobs:
+    filtered_df = filtered_df[filtered_df["직종명"].isin(selected_jobs)]
+
+if selected_statuses:
+    filtered_df = filtered_df[filtered_df["인원구분"].isin(selected_statuses)]
+
+with st.sidebar:
     st.caption(f"분석 대상: **{len(filtered_df):,}건** / 원본 {len(df):,}건")
 
-# 필터링 후 데이터가 없는 경우 처리
 if filtered_df.empty:
-    st.warning("⚠️ 선택하신 조건에 부합하는 과정이 없습니다. '모집인원 0명 제외' 토글이나 세부 필터를 조정해보세요.")
+    st.warning("⚠️ 선택하신 조건에 부합하는 과정이 없습니다. '모집인원 0명 제외' 토글이나 학원/직종 필터를 조정해보세요.")
     st.stop()
 
 # ─────────────────────────────────────────────
@@ -450,10 +615,7 @@ total_courses = len(filtered_df)
 total_registered = filtered_df["등록인원"].sum()
 avg_registered_per_course = (total_registered / total_courses) if total_courses > 0 else 0.0
 total_revenue = filtered_df["예상매출"].sum()
-
-low_enroll_courses = len(
-    filtered_df[(filtered_df["등록인원"] > 0) & (filtered_df["등록인원"] <= 5)]
-)
+selected_org_count = filtered_df["훈련기관명"].nunique()
 
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
@@ -461,8 +623,8 @@ with kpi1:
     st.metric(
         label="👥 총 등록 인원수 (Total)",
         value=f"{total_registered:,}명",
-        delta=f"개설 과정 {total_courses:,}개",
-        help="선택된 범위 내에서 실제로 모집/등록된 수강생의 총합입니다.",
+        delta=f"선택 학원 {selected_org_count}개 / 과정 {total_courses:,}개",
+        help="선택된 학원들에서 실제로 모집/등록된 수강생의 총합입니다.",
     )
 
 with kpi2:
@@ -481,6 +643,9 @@ with kpi3:
     )
 
 with kpi4:
+    low_enroll_courses = len(
+        filtered_df[(filtered_df["등록인원"] > 0) & (filtered_df["등록인원"] <= 5)]
+    )
     st.metric(
         label="⚠️ 5명 이하 소규모 과정",
         value=f"{low_enroll_courses:,}개",
@@ -494,10 +659,10 @@ st.divider()
 # ─────────────────────────────────────────────
 # 2. 경영 전략 분석 탭
 # ─────────────────────────────────────────────
-tab_job_volume, tab_timing, tab_revenue, tab_institution, tab_data = st.tabs(
+tab_job_volume, tab_calendar_view, tab_revenue, tab_institution, tab_data = st.tabs(
     [
         "🏆 [직종 규모] 직종별 실제 등록인원수",
-        "🗓️ [개강 실적] 월별 개강 추이 & 현황",
+        "🗓️ [개강 캘린더] 학원별 개강 일정 & 타임라인",
         "💵 [매출 실적] 인원수 기반 매출 분석",
         "🏫 [기관 체급] 학원별 실제 모집력 비교",
         "📋 [데이터] 상세 통합 분석표",
@@ -509,7 +674,7 @@ tab_job_volume, tab_timing, tab_revenue, tab_institution, tab_data = st.tabs(
 # ─────────────────────────────────────────────
 with tab_job_volume:
     st.subheader("💡 직종(NCS)별 실제 수강생 볼륨 (어디에 사람이 몰렸는가?)")
-    st.caption("정원과 무관하게, 실제로 가장 많은 수강생이 등록한 시장 수요 중심 직종을 파악합니다.")
+    st.caption("선택된 학원들 중에서 실제로 가장 많은 수강생이 등록한 시장 수요 중심 직종을 파악합니다.")
 
     job_agg = (
         filtered_df.groupby("직종명")
@@ -567,7 +732,7 @@ with tab_job_volume:
             fig_eff.update_layout(template="plotly_white", showlegend=False)
             st.plotly_chart(fig_eff, use_container_width=True)
         else:
-            st.caption("조건에 부합하는 직종이 없습니다.")
+            st.caption("과정 수 2개 이상인 직종이 없습니다.")
 
     st.divider()
 
@@ -575,67 +740,253 @@ with tab_job_volume:
     if not job_agg.empty:
         c_top1 = job_agg.iloc[0]
         st.info(
-            f"현재 가장 수강생이 많은 1위 직종은 **`{c_top1['직종명']}`** (총 **{c_top1['총등록인원']:,}명**, 과정 {c_top1['개설과정수']}개)이며, "
+            f"현재 선택된 범위에서 가장 수강생이 많은 1위 직종은 **`{c_top1['직종명']}`** (총 **{c_top1['총등록인원']:,}명**, 과정 {c_top1['개설과정수']}개)이며, "
             f"과정당 평균 **{c_top1['과정당평균인원']}명**이 등록되었습니다."
         )
 
 # ─────────────────────────────────────────────
-# TAB 2: 개강 실적 및 월별 추이 모니터링
+# TAB 2: 개강일정 캘린더 (핵심 기능)
 # ─────────────────────────────────────────────
-with tab_timing:
-    st.subheader("🗓️ 월별 개강 추이 & 실제 개강 과정 현황")
-    st.caption("월별 개강된 과정 수 및 실제 등록 인원수 규모를 비교 분석합니다.")
+with tab_calendar_view:
+    st.subheader("🗓️ 학원별 개강 일정 캘린더 & 개강 타이밍 분석")
+    st.caption("선택한 학원들의 개강 시작일을 달력과 타임라인으로 비교하여 경쟁사 개강 충돌일과 빈집(블루오션) 타이밍을 포착합니다.")
 
-    valid_dates_df = filtered_df.dropna(subset=["시작일_dt"]).copy()
-    if not valid_dates_df.empty:
-        monthly_df = (
-            valid_dates_df.groupby("개강월")
-            .agg(총등록인원=("등록인원", "sum"), 개설과정수=("과정명", "count"))
-            .reset_index()
-            .sort_values("개강월")
-        )
-        fig_month = px.bar(
-            monthly_df,
-            x="개강월",
-            y="총등록인원",
-            text="총등록인원",
-            color="총등록인원",
-            color_continuous_scale="Purples",
-            title="월별 실제 등록 훈련생 합계 (명)",
-            height=340,
-        )
-        fig_month.update_traces(texttemplate="%{text:,}명", textposition="outside")
-        fig_month.update_layout(template="plotly_white")
-        st.plotly_chart(fig_month, use_container_width=True)
+    cal_base_df = filtered_df.dropna(subset=["시작일_dt"]).copy()
+    available_months = sorted(cal_base_df["개강월"].dropna().unique().tolist())
 
-    st.subheader("📋 최근 개강 과정 실적 현황 (최신순)")
-    recent_opened_df = (
-        filtered_df.sort_values("훈련시작일", ascending=False)
-        .copy()
-    )
+    if not available_months:
+        st.warning("분석 가능한 개강일 데이터가 없습니다.")
+    else:
+        # 상단 컨트롤 바
+        ctrl_c1, ctrl_c2, ctrl_c3 = st.columns([2, 2, 2])
 
-    if not recent_opened_df.empty:
-        st.dataframe(
-            recent_opened_df[
-                [
-                    "훈련기관명",
-                    "과정명",
-                    "직종명",
-                    "훈련시작일",
-                    "등록인원",
-                    "인원구분",
-                    "실제훈련비",
-                    "예상매출",
-                ]
-            ],
-            use_container_width=True,
-            height=380,
-            column_config={
-                "등록인원": st.column_config.NumberColumn("실제 등록인원", format="%d 명"),
-                "실제훈련비": st.column_config.NumberColumn("1인 훈련비", format="%,d 원"),
-                "예상매출": st.column_config.NumberColumn("예상 매출", format="%,d 원"),
-            },
-        )
+        with ctrl_c1:
+            cur_month_str = date.today().strftime("%Y-%m")
+            default_m_idx = available_months.index(cur_month_str) if cur_month_str in available_months else (len(available_months) - 1)
+            selected_month = st.selectbox(
+                "📅 개강 연월 선택",
+                options=available_months,
+                index=default_m_idx,
+                help="달력으로 확인할 개강 연월을 선택하세요.",
+            )
+
+        with ctrl_c2:
+            view_mode = st.radio(
+                "보기 방식",
+                ["📅 월간 달력 그리드 뷰", "📊 간트 타임라인 (Gantt) 뷰"],
+                index=0,
+                horizontal=True,
+            )
+
+        with ctrl_c3:
+            # 캘린더 내 추가 직종 필터
+            cal_jobs = sorted([j for j in cal_base_df["직종명"].dropna().unique() if j])
+            selected_cal_job = st.selectbox(
+                "직종별 일정 필터",
+                options=["전체 직종"] + cal_jobs,
+                index=0,
+            )
+
+        # 캘린더 표시 대상 필터링
+        cal_display_df = cal_base_df[cal_base_df["개강월"] == selected_month].copy()
+        if selected_cal_job != "전체 직종":
+            cal_display_df = cal_display_df[cal_display_df["직종명"] == selected_cal_job]
+
+        # 학원별 색상 범례 (Legend) 표시
+        st.markdown("##### 🏫 학원별 색상 범례")
+        legend_cols = st.columns(min(len(selected_organs), 6))
+        for idx, org in enumerate(selected_organs[:6]):
+            st_style = get_organ_badge_style(org)
+            with legend_cols[idx]:
+                st.markdown(
+                    f'<div style="background:{st_style["bg"]}; color:{st_style["text"]}; border:1px solid {st_style["border"]}; border-radius:6px; padding:4px 8px; font-size:0.75rem; font-weight:700; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{org}">[{st_style["tag"]}] {org[:6]}</div>',
+                    unsafe_allow_html=True,
+                )
+
+        if len(selected_organs) > 6:
+            st.caption(f"외 {len(selected_organs) - 6}개 기관 추가 선택됨")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── 1. 월간 달력 그리드 뷰 ──
+        if view_mode == "📅 월간 달력 그리드 뷰":
+            y_str, m_str = selected_month.split("-")
+            year_val, month_val = int(y_str), int(m_str)
+
+            # 일자별 그룹화
+            day_courses_map = {}
+            for row in cal_display_df.itertuples():
+                d_num = row.시작일_dt.day
+                if d_num not in day_courses_map:
+                    day_courses_map[d_num] = []
+                day_courses_map[d_num].append(row)
+
+            cal_obj = calendar.Calendar(firstweekday=6)  # 일요일 시작
+            weeks = cal_obj.monthdayscalendar(year_val, month_val)
+
+            cal_html = ['<div class="cal-container">']
+
+            # 요일 헤더
+            cal_html.append('<div class="cal-header-row">')
+            days_header = [("일", "cal-header-sun"), ("월", ""), ("화", ""), ("수", ""), ("목", ""), ("금", ""), ("토", "cal-header-sat")]
+            for dh, dh_cls in days_header:
+                cal_html.append(f'<div class="cal-header-cell {dh_cls}">{dh}</div>')
+            cal_html.append('</div>')
+
+            # 주별 그리드 렌더링
+            for week in weeks:
+                cal_html.append('<div class="cal-grid-row">')
+                for d in week:
+                    if d == 0:
+                        cal_html.append('<div class="cal-cell-empty"></div>')
+                    else:
+                        is_today = (date.today().year == year_val and date.today().month == month_val and date.today().day == d)
+                        today_cls = "cal-cell-today" if is_today else ""
+
+                        courses_on_day = day_courses_map.get(d, [])
+                        cnt = len(courses_on_day)
+
+                        cal_html.append(f'<div class="cal-cell {today_cls}">')
+                        cal_html.append(f'<div class="cal-day-header">')
+                        cal_html.append(f'<span class="cal-day-num">{d}일</span>')
+                        if cnt > 0:
+                            cal_html.append(f'<span class="cal-day-badge-cnt">{cnt}개</span>')
+                        cal_html.append('</div>')
+
+                        if cnt > 0:
+                            # 2개 이상 학원이 동시 개강하는 경우 충돌 뱃지
+                            orgs_on_day = set(getattr(c, "훈련기관명") for c in courses_on_day)
+                            if len(orgs_on_day) >= 2:
+                                cal_html.append(f'<div class="cal-pill-conflict">⚡ 동시 개강 ({len(orgs_on_day)}개 학원)</div>')
+
+                            # 최대 4개 과정 표시
+                            for c in courses_on_day[:4]:
+                                org_name = getattr(c, "훈련기관명", "")
+                                crs_name = getattr(c, "과정명", "")
+                                reg_cnt = getattr(c, "등록인원", 0)
+                                b_style = get_organ_badge_style(org_name)
+
+                                full_title = f"[{org_name}] {crs_name} (등록 {reg_cnt}명)"
+                                cal_html.append(
+                                    f'<div class="cal-pill" style="background:{b_style["bg"]}; color:{b_style["text"]}; border-left-color:{b_style["border"]};" title="{full_title}">'
+                                    f'[{b_style["tag"]}] {crs_name[:9]} ({reg_cnt}명)'
+                                    f'</div>'
+                                )
+
+                            if cnt > 4:
+                                cal_html.append(f'<div style="font-size:0.68rem; color:#64748b; font-weight:600; text-align:right;">+{cnt - 4}개 과정 더보기</div>')
+
+                        cal_html.append('</div>')
+                cal_html.append('</div>')
+
+            cal_html.append('</div>')
+            st.markdown("".join(cal_html), unsafe_allow_html=True)
+
+            # ── 캘린더 아래 상세 일자 조회 ──
+            st.markdown("#### 📌 일자별 개강 과정 상세 조회")
+            days_with_courses = sorted(day_courses_map.keys())
+            if days_with_courses:
+                sel_day_c1, sel_day_c2 = st.columns([2, 4])
+                with sel_day_c1:
+                    chosen_day = st.selectbox(
+                        "확인할 날짜 선택",
+                        options=days_with_courses,
+                        format_func=lambda d: f"{selected_month}-{d:02d} ({len(day_courses_map[d])}개 개강)",
+                    )
+                with sel_day_c2:
+                    day_courses_list = day_courses_map[chosen_day]
+                    orgs_that_day = list(set(getattr(c, "훈련기관명") for c in day_courses_list))
+                    st.info(f"**{selected_month}-{chosen_day:02d}** 개강: 총 **{len(day_courses_list)}개** 과정 ({', '.join(get_short_inst_name(o) for o in orgs_that_day)})")
+
+                day_detail_df = pd.DataFrame([
+                    {
+                        "훈련기관": getattr(c, "훈련기관명"),
+                        "과정명": getattr(c, "과정명"),
+                        "직종명": getattr(c, "직종명"),
+                        "등록인원": getattr(c, "등록인원"),
+                        "훈련시작일": getattr(c, "훈련시작일"),
+                        "훈련종료일": getattr(c, "훈련종료일"),
+                        "1인훈련비": getattr(c, "실제훈련비"),
+                        "예상매출": getattr(c, "예상매출"),
+                    }
+                    for c in day_courses_map[chosen_day]
+                ]).sort_values("등록인원", ascending=False)
+
+                st.dataframe(
+                    day_detail_df,
+                    use_container_width=True,
+                    height=260,
+                    column_config={
+                        "등록인원": st.column_config.NumberColumn("등록인원", format="%d 명"),
+                        "1인훈련비": st.column_config.NumberColumn("1인 훈련비", format="%,d 원"),
+                        "예상매출": st.column_config.NumberColumn("예상 매출", format="%,d 원"),
+                    },
+                )
+            else:
+                st.info("선택된 월에는 개강 과정이 없습니다.")
+
+            st.divider()
+
+            # ── 동시 개강 격전일 및 블루오션(빈집) 타이밍 분석 ──
+            st.markdown("#### ⚡ 동시 개강 경쟁일 & 블루오션 타이밍 분석")
+            conflict_days = [d for d in days_with_courses if len(set(getattr(c, "훈련기관명") for c in day_courses_map[d])) >= 2]
+
+            ana_col1, ana_col2 = st.columns(2)
+            with ana_col1:
+                st.markdown("##### ⚔️ 경쟁사 동시 개강 격전일 (같은 날 개강 충돌)")
+                if conflict_days:
+                    for cd in conflict_days[:5]:
+                        c_list = day_courses_map[cd]
+                        c_orgs = list(set(getattr(c, "훈련기관명") for c in c_list))
+                        org_tags = [f"`{get_short_inst_name(o)}`" for o in c_orgs]
+                        st.warning(f"**{selected_month}-{cd:02d}** : 총 **{len(c_list)}개** 과정 동시 개강 ({', '.join(org_tags)})")
+                else:
+                    st.success("해당 월에는 선택한 학원 간의 동일 날짜 개강 충돌이 없습니다.")
+
+            with ana_col2:
+                st.markdown("##### 🌟 개강 빈집 타이밍 (경쟁사 개강이 적은 주차)")
+                # 월 전체 날짜 중 개강이 0건인 평일(월~금) 탐색
+                empty_weekdays = []
+                for d in range(1, calendar.monthrange(year_val, month_val)[1] + 1):
+                    dt_check = date(year_val, month_val, d)
+                    if dt_check.weekday() < 5 and d not in day_courses_map:
+                        empty_weekdays.append(d)
+
+                if empty_weekdays:
+                    sample_days = [f"{d}일" for d in empty_weekdays[:8]]
+                    st.success(f"**경쟁사 개강 없는 평일**: {', '.join(sample_days)} 등 총 {len(empty_weekdays)}일\n\n💡 해당 시점에 미토 과정을 배치하면 경쟁사와의 직접적인 수강생 유치 충돌을 피할 수 있습니다.")
+                else:
+                    st.info("해당 월에는 대부분의 평일에 개강 일정이 잡혀 있습니다.")
+
+        # ── 2. 간트 타임라인 (Gantt) 뷰 ──
+        else:
+            st.markdown("#### 📊 학원별 개강 일정 타임라인 (Gantt 차트)")
+            timeline_df = cal_display_df.copy()
+            timeline_df["종료일_dt"] = timeline_df["종료일_dt"].fillna(timeline_df["시작일_dt"] + pd.Timedelta(days=30))
+            timeline_df["표시명"] = timeline_df["기관약칭"] + " - " + timeline_df["과정명"].str[:22]
+
+            fig_timeline = px.timeline(
+                timeline_df.sort_values(["시작일_dt", "훈련기관명"]),
+                x_start="시작일_dt",
+                x_end="종료일_dt",
+                y="표시명",
+                color="훈련기관명",
+                text="등록인원",
+                hover_name="과정명",
+                hover_data={
+                    "훈련기관명": True,
+                    "직종명": True,
+                    "등록인원": True,
+                    "훈련시작일": True,
+                    "훈련종료일": True,
+                },
+                labels={"표시명": "훈련과정", "훈련시작일": "시작일"},
+                height=max(450, len(timeline_df) * 28),
+            )
+            fig_timeline.update_yaxes(autorange="reversed")
+            fig_timeline.update_traces(texttemplate="%{text}명", textposition="inside")
+            fig_timeline.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=30, b=10))
+            st.plotly_chart(fig_timeline, use_container_width=True)
 
 # ─────────────────────────────────────────────
 # TAB 3: 인원수 기반 매출 분석 및 시뮬레이션
@@ -694,7 +1045,7 @@ with tab_revenue:
 # ─────────────────────────────────────────────
 with tab_institution:
     st.subheader("🏫 훈련기관별 실제 수강생 모집력 랭킹")
-    st.caption("정원이 아닌 '실제 등록 인원수' 총합과 '과정당 평균 인원'으로 각 학원의 실제 모집 체급을 비교합니다.")
+    st.caption("선택한 학원들의 '실제 등록 인원수' 총합과 '과정당 평균 인원'으로 실제 모집 체급을 비교합니다.")
 
     org_agg = (
         filtered_df.groupby("훈련기관명")
@@ -734,7 +1085,7 @@ with tab_institution:
 
     with col_org2:
         st.markdown("#### ⚡ 기관별 과정당 평균 모집 인원 비교")
-        top_avg_orgs = org_agg[org_agg["개설과정수"] >= 2].sort_values("과정당평균인원", ascending=False).head(10)
+        top_avg_orgs = org_agg.sort_values("과정당평균인원", ascending=False).head(10)
         fig_avg = px.bar(
             top_avg_orgs,
             x="훈련기관명",
@@ -776,6 +1127,7 @@ with tab_data:
                 "등록인원",
                 "인원구분",
                 "훈련시작일",
+                "훈련종료일",
                 "실제훈련비",
                 "예상매출",
                 "만족도점수",
