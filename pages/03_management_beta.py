@@ -73,12 +73,19 @@ st.markdown(
     }
     .cal-cell {
         min-height: 125px;
-        max-height: 175px;
+        max-height: 200px;
         overflow-y: auto;
         padding: 6px;
         border-right: 1px solid #f1f5f9;
         background: #ffffff;
         transition: background 0.15s ease;
+    }
+    .cal-cell::-webkit-scrollbar {
+        width: 4px;
+    }
+    .cal-cell::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
     }
     .cal-cell:last-child {
         border-right: none;
@@ -135,6 +142,48 @@ st.markdown(
         border-radius: 4px;
         margin-bottom: 3px;
         text-align: center;
+    }
+    /* 더보기 토글 버튼 및 아코디언 스타일 */
+    .cal-more-details {
+        margin-top: 3px;
+    }
+    .cal-more-summary {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 4px;
+        padding: 2px 6px;
+        text-align: center;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+        transition: all 0.15s ease;
+        display: block;
+    }
+    .cal-more-summary::-webkit-details-marker {
+        display: none;
+    }
+    .cal-more-summary:hover {
+        background: #dbeafe;
+        color: #1d4ed8;
+        border-color: #93c5fd;
+    }
+    .cal-more-details[open] .cal-more-summary {
+        background: #f1f5f9;
+        color: #475569;
+        border-color: #cbd5e1;
+        margin-bottom: 4px;
+    }
+    .cal-more-summary-text-open {
+        display: none;
+    }
+    .cal-more-details[open] .cal-more-summary-text-open {
+        display: inline;
+    }
+    .cal-more-details[open] .cal-more-summary-text-closed {
+        display: none;
     }
     </style>
     """,
@@ -859,7 +908,7 @@ with tab_calendar_view:
                             if len(orgs_on_day) >= 2:
                                 cal_html.append(f'<div class="cal-pill-conflict">⚡ 동시 개강 ({len(orgs_on_day)}개 학원)</div>')
 
-                            # 최대 4개 과정 표시
+                            # 최대 4개 과정 기본 표시
                             for c in courses_on_day[:4]:
                                 org_name = getattr(c, "훈련기관명", "")
                                 crs_name = getattr(c, "과정명", "")
@@ -873,8 +922,29 @@ with tab_calendar_view:
                                     f'</div>'
                                 )
 
+                            # 5개 이상일 경우 인터랙티브 더보기/접기 아코디언 제공
                             if cnt > 4:
-                                cal_html.append(f'<div style="font-size:0.68rem; color:#64748b; font-weight:600; text-align:right;">+{cnt - 4}개 과정 더보기</div>')
+                                more_cnt = cnt - 4
+                                cal_html.append('<details class="cal-more-details">')
+                                cal_html.append(
+                                    f'<summary class="cal-more-summary">'
+                                    f'<span class="cal-more-summary-text-closed">+{more_cnt}개 과정 더보기 ▼</span>'
+                                    f'<span class="cal-more-summary-text-open">접기 ▲</span>'
+                                    f'</summary>'
+                                )
+                                for c in courses_on_day[4:]:
+                                    org_name = getattr(c, "훈련기관명", "")
+                                    crs_name = getattr(c, "과정명", "")
+                                    reg_cnt = getattr(c, "등록인원", 0)
+                                    b_style = get_organ_badge_style(org_name)
+
+                                    full_title = f"[{org_name}] {crs_name} (등록 {reg_cnt}명)"
+                                    cal_html.append(
+                                        f'<div class="cal-pill" style="background:{b_style["bg"]}; color:{b_style["text"]}; border-left-color:{b_style["border"]};" title="{full_title}">'
+                                        f'[{b_style["tag"]}] {crs_name[:9]} ({reg_cnt}명)'
+                                        f'</div>'
+                                    )
+                                cal_html.append('</details>')
 
                         cal_html.append('</div>')
                 cal_html.append('</div>')
