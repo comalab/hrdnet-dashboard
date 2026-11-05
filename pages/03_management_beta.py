@@ -743,25 +743,26 @@ tab_job_volume, tab_competitor_match, tab_calendar_view, tab_revenue, tab_instit
 # ─────────────────────────────────────────────
 # TAB 1: 직종(NCS)별 실제 등록인원수 랭킹
 # ─────────────────────────────────────────────
-with tab_job_volume:
+@st.fragment
+def render_job_volume_tab(df_data, mito_jobs_list, is_mito_avail):
     st.subheader("💡 직종(NCS)별 실제 수강생 볼륨 (어디에 사람이 몰렸는가?)")
     st.caption("선택된 학원들 중에서 실제로 가장 많은 수강생이 등록한 시장 수요 중심 직종을 파악합니다.")
 
     col_jv1, col_jv2 = st.columns([1.5, 3])
     with col_jv1:
-        if is_mito_available:
+        if is_mito_avail:
             jv_mito_only = st.checkbox(
                 "🎯 미토 기준 (미토 개설 직종 시장만 보기)",
                 value=False,
                 key="jv_mito_only_box",
-                help=f"미토직업전문학교가 개설한 {len(mito_jobs)}개 직종에 한정하여 시장 규모를 분석합니다.",
+                help=f"미토직업전문학교가 개설한 {len(mito_jobs_list)}개 직종에 한정하여 시장 규모를 분석합니다.",
             )
         else:
             jv_mito_only = False
 
-    target_job_df = filtered_df
-    if jv_mito_only and is_mito_available:
-        target_job_df = filtered_df[filtered_df["직종명"].isin(mito_jobs)]
+    target_job_df = df_data
+    if jv_mito_only and is_mito_avail:
+        target_job_df = df_data[df_data["직종명"].isin(mito_jobs_list)]
 
     job_agg = (
         target_job_df.groupby("직종명")
@@ -831,16 +832,20 @@ with tab_job_volume:
             f"과정당 평균 **{c_top1['과정당평균인원']}명**이 등록되었습니다."
         )
 
+with tab_job_volume:
+    render_job_volume_tab(filtered_df, mito_jobs, is_mito_available)
+
 # ─────────────────────────────────────────────
 # TAB: 경쟁 직종 성과 비교 (유사/겹치는 직종 중심 맞대결)
 # ─────────────────────────────────────────────
-with tab_competitor_match:
+@st.fragment
+def render_competitor_match_tab(df_data, mito_jobs_list, is_mito_avail, organs_selected):
     st.subheader("⚔️ 경쟁사 간 직종별 성과 맞대결 분석")
     st.caption("선택한 학원들 간에 **비슷하게 겹치는 직종(경쟁 직종)**을 추출하여 실제 등록 인원수, 과정당 모집 효율, 시장 점유율을 시각화로 비교합니다.")
 
     # 직종별 x 훈련기관별 집계
     comp_agg = (
-        filtered_df.groupby(["직종명", "훈련기관명"])
+        df_data.groupby(["직종명", "훈련기관명"])
         .agg(
             등록인원=("등록인원", "sum"),
             과정수=("과정명", "count"),
@@ -862,18 +867,18 @@ with tab_competitor_match:
 
     # 학원별 고유 컬러 매핑 생성
     color_map = {}
-    for org in filtered_df["훈련기관명"].unique():
+    for org in df_data["훈련기관명"].unique():
         b_style = get_organ_badge_style(org)
         color_map[org] = b_style["border"]
 
-    if not overlapping_jobs and len(selected_organs) >= 2:
+    if not overlapping_jobs and len(organs_selected) >= 2:
         st.info("💡 현재 선택된 학원들 간에 정확히 일치하는 직종 코드가 없습니다. '전체 직종 비교'를 통해 각 학원의 개설 직종을 함께 비교할 수 있습니다.")
 
     comp_c1, comp_c2, comp_c3 = st.columns([1.3, 1.1, 2.2])
     with comp_c1:
         comp_mito_only = st.checkbox(
             "🎯 미토 기준 (미토 개설 직종만)",
-            value=True if is_mito_available else False,
+            value=True if is_mito_avail else False,
             key="comp_mito_only_box",
             help="미토직업전문학교가 개설한 직종군에 대해서만 타 학원들과의 성과를 맞대결합니다. (미토 미개설 직종 제외)",
         )
@@ -886,8 +891,8 @@ with tab_competitor_match:
         )
 
     # 미토 기준 여부에 따른 직종 풀 결정
-    if comp_mito_only and is_mito_available:
-        base_pool = [j for j in all_jobs_in_data if j in mito_jobs]
+    if comp_mito_only and is_mito_avail:
+        base_pool = [j for j in all_jobs_in_data if j in mito_jobs_list]
     else:
         base_pool = all_jobs_in_data
 
@@ -903,12 +908,13 @@ with tab_competitor_match:
             options=available_jobs_for_filter,
             default=available_jobs_for_filter[:10] if len(available_jobs_for_filter) > 10 else available_jobs_for_filter,
             placeholder="직종을 선택하세요",
+            key="comp_multiselect_jobs",
         )
 
     if not selected_compare_jobs:
         st.warning("비교할 직종이 선택되지 않았습니다. 위에서 직종을 1개 이상 선택해 주세요.")
     else:
-        if comp_mito_only and is_mito_available:
+        if comp_mito_only and is_mito_avail:
             st.info(f"🎯 **[미토직업전문학교 기준 맞대결]** 미토가 운영하는 직종을 기준으로 타 학원들과의 경쟁 성과를 비교합니다. (분석 직종 {len(selected_compare_jobs)}개)")
 
         match_df = comp_agg[comp_agg["직종명"].isin(selected_compare_jobs)].copy()
@@ -980,9 +986,17 @@ with tab_competitor_match:
         with col_sub2:
             # 시각화 3: 단일 직종 심층 점유율 분석
             st.markdown("#### 🥧 3. 격전 직종별 수강생 점유율 심층 분석")
+
+            # 선택 가능한 직종 목록에서 현재 선택값 유효성 체크
+            prev_deep_job = st.session_state.get("deep_comp_job_select")
+            default_deep_idx = 0
+            if prev_deep_job in selected_compare_jobs:
+                default_deep_idx = selected_compare_jobs.index(prev_deep_job)
+
             target_deep_job = st.selectbox(
                 "점유율을 확인할 직종 선택",
                 options=selected_compare_jobs,
+                index=default_deep_idx,
                 key="deep_comp_job_select",
             )
             deep_df = comp_agg[comp_agg["직종명"] == target_deep_job]
@@ -1018,14 +1032,17 @@ with tab_competitor_match:
 
         st.dataframe(pivot_display, use_container_width=True)
 
+with tab_competitor_match:
+    render_competitor_match_tab(filtered_df, mito_jobs, is_mito_available, selected_organs)
+
 # ─────────────────────────────────────────────
 # TAB 2: 개강일정 캘린더 (핵심 기능)
 # ─────────────────────────────────────────────
-with tab_calendar_view:
+@st.fragment
+def render_calendar_tab(cal_base_df, mito_jobs_list, is_mito_avail, organs_selected):
     st.subheader("🗓️ 학원별 개강 일정 캘린더 & 개강 타이밍 분석")
     st.caption("선택한 학원들의 개강 시작일을 달력과 타임라인으로 비교하여 경쟁사 개강 충돌일과 빈집(블루오션) 타이밍을 포착합니다.")
 
-    cal_base_df = filtered_df.dropna(subset=["시작일_dt"]).copy()
     available_months = sorted(cal_base_df["개강월"].dropna().unique().tolist())
 
     if not available_months:
@@ -1042,6 +1059,7 @@ with tab_calendar_view:
                 options=available_months,
                 index=default_m_idx,
                 help="달력으로 확인할 개강 연월을 선택하세요.",
+                key="cal_selected_month_key",
             )
 
         with ctrl_c2:
@@ -1050,33 +1068,35 @@ with tab_calendar_view:
                 ["📅 월간 달력 그리드 뷰", "📊 간트 타임라인 (Gantt) 뷰"],
                 index=0,
                 horizontal=True,
+                key="cal_view_mode_key",
             )
 
         with ctrl_c3:
             # 캘린더 내 추가 직종 필터
             cal_jobs = sorted([j for j in cal_base_df["직종명"].dropna().unique() if j])
             cal_options = ["전체 직종"]
-            if is_mito_available:
+            if is_mito_avail:
                 cal_options.append("🎯 [미토 기준] 미토 개설 직종 전체")
             cal_options.extend(cal_jobs)
 
             selected_cal_job = st.selectbox(
                 "직종별 일정 필터",
                 options=cal_options,
-                index=1 if is_mito_available else 0,
+                index=1 if is_mito_avail else 0,
+                key="cal_selected_job_key",
             )
 
         # 캘린더 표시 대상 필터링
         cal_display_df = cal_base_df[cal_base_df["개강월"] == selected_month].copy()
         if selected_cal_job == "🎯 [미토 기준] 미토 개설 직종 전체":
-            cal_display_df = cal_display_df[cal_display_df["직종명"].isin(mito_jobs)]
+            cal_display_df = cal_display_df[cal_display_df["직종명"].isin(mito_jobs_list)]
         elif selected_cal_job != "전체 직종":
             cal_display_df = cal_display_df[cal_display_df["직종명"] == selected_cal_job]
 
         # 학원별 색상 범례 (Legend) 표시
         st.markdown("##### 🏫 학원별 색상 범례")
-        legend_cols = st.columns(min(len(selected_organs), 6))
-        for idx, org in enumerate(selected_organs[:6]):
+        legend_cols = st.columns(min(len(organs_selected), 6))
+        for idx, org in enumerate(organs_selected[:6]):
             st_style = get_organ_badge_style(org)
             with legend_cols[idx]:
                 st.markdown(
@@ -1084,8 +1104,8 @@ with tab_calendar_view:
                     unsafe_allow_html=True,
                 )
 
-        if len(selected_organs) > 6:
-            st.caption(f"외 {len(selected_organs) - 6}개 기관 추가 선택됨")
+        if len(organs_selected) > 6:
+            st.caption(f"외 {len(organs_selected) - 6}개 기관 추가 선택됨")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1194,6 +1214,7 @@ with tab_calendar_view:
                         "확인할 날짜 선택",
                         options=days_with_courses,
                         format_func=lambda d: f"{selected_month}-{d:02d} ({len(day_courses_map[d])}개 개강)",
+                        key="cal_chosen_day_key",
                     )
                 with sel_day_c2:
                     day_courses_list = day_courses_map[chosen_day]
@@ -1289,6 +1310,10 @@ with tab_calendar_view:
             fig_timeline.update_traces(texttemplate="%{text}명", textposition="inside")
             fig_timeline.update_layout(template="plotly_white", margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_timeline, use_container_width=True)
+
+with tab_calendar_view:
+    cal_base_data = filtered_df.dropna(subset=["시작일_dt"]).copy()
+    render_calendar_tab(cal_base_data, mito_jobs, is_mito_available, selected_organs)
 
 # ─────────────────────────────────────────────
 # TAB 3: 인원수 기반 매출 분석 및 시뮬레이션
