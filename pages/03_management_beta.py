@@ -708,9 +708,10 @@ st.divider()
 # ─────────────────────────────────────────────
 # 2. 경영 전략 분석 탭
 # ─────────────────────────────────────────────
-tab_job_volume, tab_calendar_view, tab_revenue, tab_institution, tab_data = st.tabs(
+tab_job_volume, tab_competitor_match, tab_calendar_view, tab_revenue, tab_institution, tab_data = st.tabs(
     [
         "🏆 [직종 규모] 직종별 실제 등록인원수",
+        "⚔️ [경쟁 직종 성과] 학원별 맞대결 비교",
         "🗓️ [개강 캘린더] 학원별 개강 일정 & 타임라인",
         "💵 [매출 실적] 인원수 기반 매출 분석",
         "🏫 [기관 체급] 학원별 실제 모집력 비교",
@@ -792,6 +793,173 @@ with tab_job_volume:
             f"현재 선택된 범위에서 가장 수강생이 많은 1위 직종은 **`{c_top1['직종명']}`** (총 **{c_top1['총등록인원']:,}명**, 과정 {c_top1['개설과정수']}개)이며, "
             f"과정당 평균 **{c_top1['과정당평균인원']}명**이 등록되었습니다."
         )
+
+# ─────────────────────────────────────────────
+# TAB: 경쟁 직종 성과 비교 (유사/겹치는 직종 중심 맞대결)
+# ─────────────────────────────────────────────
+with tab_competitor_match:
+    st.subheader("⚔️ 경쟁사 간 직종별 성과 맞대결 분석")
+    st.caption("선택한 학원들 간에 **비슷하게 겹치는 직종(경쟁 직종)**을 추출하여 실제 등록 인원수, 과정당 모집 효율, 시장 점유율을 시각화로 비교합니다.")
+
+    # 직종별 x 훈련기관별 집계
+    comp_agg = (
+        filtered_df.groupby(["직종명", "훈련기관명"])
+        .agg(
+            등록인원=("등록인원", "sum"),
+            과정수=("과정명", "count"),
+            예상매출=("예상매출", "sum"),
+            평균훈련비=("실제훈련비", "mean"),
+        )
+        .reset_index()
+    )
+    comp_agg["과정당평균인원"] = (comp_agg["등록인원"] / comp_agg["과정수"]).round(1)
+    comp_agg["기관약칭"] = comp_agg["훈련기관명"].apply(get_short_inst_name)
+
+    # 각 직종별 개설 학원 수 계산
+    job_org_count = comp_agg.groupby("직종명")["훈련기관명"].nunique().to_dict()
+    comp_agg["개설학원수"] = comp_agg["직종명"].map(job_org_count)
+
+    # 겹치는 직종 (2개 이상 학원이 개설한 직종)
+    overlapping_jobs = sorted([j for j, count in job_org_count.items() if count >= 2])
+    all_jobs_in_data = sorted(comp_agg["직종명"].unique())
+
+    # 학원별 고유 컬러 매핑 생성
+    color_map = {}
+    for org in filtered_df["훈련기관명"].unique():
+        b_style = get_organ_badge_style(org)
+        color_map[org] = b_style["border"]
+
+    if not overlapping_jobs and len(selected_organs) >= 2:
+        st.info("💡 현재 선택된 학원들 간에 정확히 일치하는 직종 코드가 없습니다. '전체 직종 비교'를 통해 각 학원의 개설 직종을 함께 비교할 수 있습니다.")
+
+    comp_c1, comp_c2 = st.columns([1, 2])
+    with comp_c1:
+        default_overlap = True if overlapping_jobs else False
+        overlap_only = st.checkbox(
+            "⚔️ 2개 이상 학원이 겹치는 '경쟁 직종'만 보기",
+            value=default_overlap,
+            help="복수의 학원이 동시에 과정을 개설한 직종만 골라내어 직접적인 맞대결 성과를 비교합니다.",
+        )
+
+    available_jobs_for_filter = overlapping_jobs if overlap_only else all_jobs_in_data
+
+    with comp_c2:
+        selected_compare_jobs = st.multiselect(
+            "비교할 직종 선택 (기본: 상위 경쟁 직종)",
+            options=available_jobs_for_filter,
+            default=available_jobs_for_filter[:10] if len(available_jobs_for_filter) > 10 else available_jobs_for_filter,
+            placeholder="직종을 선택하세요",
+        )
+
+    if not selected_compare_jobs:
+        st.warning("비교할 직종이 선택되지 않았습니다. 위에서 직종을 1개 이상 선택해 주세요.")
+    else:
+        match_df = comp_agg[comp_agg["직종명"].isin(selected_compare_jobs)].copy()
+
+        # 핵심 요약 KPI
+        kpi_m1, kpi_m2, kpi_m3 = st.columns(3)
+        with kpi_m1:
+            st.metric("⚔️ 분석 대상 직종 수", f"{len(selected_compare_jobs):,}개")
+        with kpi_m2:
+            st.metric("👥 비교 직종 총 수강생", f"{match_df['등록인원'].sum():,}명")
+        with kpi_m3:
+            top_contested = max(selected_compare_jobs, key=lambda j: job_org_count.get(j, 0))
+            st.metric(
+                "🔥 최대 격전 직종",
+                f"{top_contested}",
+                f"{job_org_count.get(top_contested, 0)}개 학원 동시 경쟁",
+            )
+
+        st.divider()
+
+        # 시각화 1: 직종별 학원별 등록인원 비교 (Grouped Bar)
+        st.markdown("#### 📊 1. 직종별 학원별 등록 인원수 맞대결 (볼륨 비교)")
+        st.caption("비슷한 직종에서 어떤 학원이 실제 수강생을 더 많이 유치했는지 한눈에 비교합니다.")
+
+        fig_comp_bar = px.bar(
+            match_df,
+            x="직종명",
+            y="등록인원",
+            color="훈련기관명",
+            barmode="group",
+            text="등록인원",
+            color_discrete_map=color_map,
+            labels={"등록인원": "실제 등록 인원수 (명)", "직종명": "직종(NCS)", "훈련기관명": "학원명"},
+            height=460,
+        )
+        fig_comp_bar.update_traces(texttemplate="%{text}명", textposition="outside")
+        fig_comp_bar.update_layout(
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis_tickangle=-25,
+        )
+        st.plotly_chart(fig_comp_bar, use_container_width=True)
+
+        col_sub1, col_sub2 = st.columns(2)
+
+        with col_sub1:
+            # 시각화 2: 과정당 평균 모집 인원 비교 (효율성)
+            st.markdown("#### ⚡ 2. 직종별 과정당 평균 모집 인원 (모집 체급)")
+            st.caption("과정 1개를 열었을 때 누가 더 꽉 채워 모집했는지 효율을 비교합니다.")
+            fig_eff_bar = px.bar(
+                match_df,
+                x="직종명",
+                y="과정당평균인원",
+                color="훈련기관명",
+                barmode="group",
+                text="과정당평균인원",
+                color_discrete_map=color_map,
+                labels={"과정당평균인원": "과정당 평균 인원 (명/과정)", "직종명": "직종(NCS)", "훈련기관명": "학원명"},
+                height=420,
+            )
+            fig_eff_bar.update_traces(texttemplate="%{text:.1f}명", textposition="outside")
+            fig_eff_bar.update_layout(
+                template="plotly_white",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                xaxis_tickangle=-25,
+            )
+            st.plotly_chart(fig_eff_bar, use_container_width=True)
+
+        with col_sub2:
+            # 시각화 3: 단일 직종 심층 점유율 분석
+            st.markdown("#### 🥧 3. 격전 직종별 수강생 점유율 심층 분석")
+            target_deep_job = st.selectbox(
+                "점유율을 확인할 직종 선택",
+                options=selected_compare_jobs,
+                key="deep_comp_job_select",
+            )
+            deep_df = comp_agg[comp_agg["직종명"] == target_deep_job]
+
+            fig_deep_pie = px.pie(
+                deep_df,
+                names="훈련기관명",
+                values="등록인원",
+                hole=0.4,
+                color="훈련기관명",
+                color_discrete_map=color_map,
+                height=360,
+            )
+            fig_deep_pie.update_traces(textinfo="percent+label")
+            fig_deep_pie.update_layout(showlegend=False)
+            st.plotly_chart(fig_deep_pie, use_container_width=True)
+
+        st.divider()
+
+        # 상세 크로스 피벗 성과표
+        st.markdown("#### 📋 4. 직종 × 학원 등록인원 크로스 성과표")
+        st.caption("각 직종별로 학원들이 몇 명의 수강생을 모집했고, 과정 1개당 평균 몇 명을 유치했는지 교차 집계합니다.")
+
+        pivot_count = match_df.pivot(index="직종명", columns="훈련기관명", values="등록인원").fillna(0).astype(int)
+        pivot_avg = match_df.pivot(index="직종명", columns="훈련기관명", values="과정당평균인원").fillna(0).round(1)
+
+        pivot_display = pd.DataFrame(index=pivot_count.index)
+        for col in pivot_count.columns:
+            pivot_display[col] = [
+                f"{c:,}명 (과정당 {a}명)" if c > 0 else "-"
+                for c, a in zip(pivot_count[col], pivot_avg[col])
+            ]
+
+        st.dataframe(pivot_display, use_container_width=True)
 
 # ─────────────────────────────────────────────
 # TAB 2: 개강일정 캘린더 (핵심 기능)
