@@ -253,6 +253,79 @@ def get_organ_badge_style(organ_name: str) -> dict:
 
 
 # ─────────────────────────────────────────────
+# 미토 5대 핵심 직종 카테고리 정의 및 분류 함수
+# ─────────────────────────────────────────────
+MITTO_JOB_GROUPS = [
+    "무역물류",
+    "문화콘텐츠 (캐드 포함)",
+    "사무행정",
+    "전산회계",
+    "직업상담",
+]
+
+
+def classify_mitto_job_group(job_name: str, course_name: str = "") -> str:
+    """NCS 세부 직종명 및 과정명을 기반으로 미토 5대 대표 카테고리로 통합 분류 (타 학원 유사 직종 포함)
+
+    1. 무역물류: 수출입관리, 운송관리, 물류, 무역, 유통, SCM, 무역영어, 국제무역사, 물류관리사 등
+    2. 문화콘텐츠 (캐드 포함): CAD/캐드 도면, 실내디자인, 건축제도, 기계설계, 광고콘텐츠, UI/UX, 영상, 웹디자인, SW개발 등
+    3. 사무행정: 사무행정, 비서, 총무, 인사, 컴퓨터활용능력(컴활), OA, ITQ 등
+    4. 전산회계: 회계·감사, 세무, 재무, 전산회계, 전산세무, 재경관리사, FAT, TAT, ERP회계 등
+    5. 직업상담: 직업상담, 취업지원, 전직지원, 직업상담사 등
+    6. 기타 (타 직종): 위 5개에 속하지 않는 타 학원 직종(제과제빵, 바리스타, 미용, 중장비 등)
+    """
+    job = str(job_name).strip() if pd.notna(job_name) else ""
+    course = str(course_name).strip() if pd.notna(course_name) else ""
+    combined = f"{job} {course}".lower()
+
+    # 1. 전산회계
+    if any(k in job for k in ["회계", "세무", "재무", "자금", "감사"]):
+        return "전산회계"
+    if any(k in combined for k in ["전산회계", "전산세무", "재경관리", "fat", "tat", "erp회계", "세무회계", "회계실무", "회계·감사"]):
+        return "전산회계"
+
+    # 2. 직업상담
+    if any(k in job for k in ["직업상담"]):
+        return "직업상담"
+    if any(k in combined for k in ["직업상담", "직업상담사", "취업지원", "취업상담", "전직지원"]):
+        return "직업상담"
+
+    # 3. 무역물류
+    if any(k in job for k in ["수출입", "운송", "물류", "무역", "유통", "보관하역", "구매자재"]):
+        return "무역물류"
+    if any(k in combined for k in ["무역", "물류", "수출입", "국제무역", "물류관리", "해양물류", "해상물류", "포워딩", "scm"]):
+        return "무역물류"
+
+    # 4. 문화콘텐츠 (캐드 포함)
+    # 캐드(CAD) 및 도면/설계/실내건축
+    if any(k in combined for k in ["cad", "캐드", "cat ", "cat1", "cat2", "스케치업", "sketchup", "도면", "건축제도", "기계설계", "실내건축", "실내디자인", "인테리어"]):
+        return "문화콘텐츠 (캐드 포함)"
+    # 디자인/영상/콘텐츠
+    if any(k in job for k in [
+        "콘텐츠", "디자인", "ui/ux", "영상", "애니메이션", "문화", "영화", "방송", "게임", "출판", "인쇄", "시각", "실내"
+    ]):
+        return "문화콘텐츠 (캐드 포함)"
+    if any(k in combined for k in [
+        "영상", "유튜브", "프리미어", "에펙", "포토샵", "일러스트", "웹디자인", "웹퍼블리셔", "ui/ux", "피그마", "figma",
+        "디지털디자인", "시각디자인", "컴퓨터그래픽", "인디자인", "광고콘텐츠", "스마트케어", "앱콘텐츠"
+    ]):
+        return "문화콘텐츠 (캐드 포함)"
+    # IT/SW 융복합
+    if any(k in job for k in ["응용sw", "sw엔지니어링", "소프트웨어", "정보처리"]):
+        return "문화콘텐츠 (캐드 포함)"
+    if any(k in combined for k in ["파이썬", "python", "gpt", "인공지능", "코딩", "웹개발"]):
+        return "문화콘텐츠 (캐드 포함)"
+
+    # 5. 사무행정
+    if any(k in job for k in ["사무행정", "비서", "총무", "인사", "노무", "경영기획"]):
+        return "사무행정"
+    if any(k in combined for k in ["컴퓨터활용", "컴활", "사무행정", "oa", "itq", "문서작성", "엑셀", "파워포인트"]):
+        return "사무행정"
+
+    return "기타 (타 직종)"
+
+
+# ─────────────────────────────────────────────
 # 데이터 정제 및 파생변수 생성 함수
 # ─────────────────────────────────────────────
 def prepare_bi_data(raw_df: pd.DataFrame) -> pd.DataFrame:
@@ -304,6 +377,14 @@ def prepare_bi_data(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     df["인원구분"] = [classify_headcount_status(r) for r in df["등록인원"]]
     df["기관약칭"] = [get_short_inst_name(o) for o in df["훈련기관명"]]
+
+    # 5대 대표 직종 그룹 파생변수 생성
+    course_name_col = "과정명" if "과정명" in df.columns else ("훈련과정명" if "훈련과정명" in df.columns else "")
+    course_series = df[course_name_col] if course_name_col else [""] * len(df)
+    df["직종그룹"] = [
+        classify_mitto_job_group(j, c)
+        for j, c in zip(df["직종명"], course_series)
+    ]
 
     return df
 
@@ -609,31 +690,48 @@ with st.sidebar:
     )
     st.session_state.selected_organs = selected_organs
 
-    # ── 미토 개설 직종 사전 파악 ──
+    # ── 미토 개설 직종 및 그룹 사전 파악 ──
     mito_courses = df[df["훈련기관명"].str.contains("미토", na=False)]
     mito_jobs = sorted([j for j in mito_courses["직종명"].dropna().unique() if j and j != "기타직종"])
-    is_mito_available = len(mito_jobs) > 0
+    mito_groups_in_data = [g for g in MITTO_JOB_GROUPS if g in mito_courses["직종그룹"].values]
+    is_mito_available = len(mito_jobs) > 0 or len(mito_groups_in_data) > 0
 
     # ── 분석 관점 (미토 기준) ──
     st.subheader("🎯 분석 관점 설정")
     if is_mito_available:
         mito_focus_global = st.toggle(
-            "🎯 미토직업전문학교 기준 (미토 관련 직종만)",
+            "🎯 미토직업전문학교 기준 (5대 직종군만)",
             value=True,
-            help=f"미토직업전문학교가 개설한 {len(mito_jobs)}개 직종에 속하는 과정들만 필터링하여 전체 대시보드(KPI, 차트, 캘린더 등)에서 타 학원과 비교합니다.",
+            help="미토직업전문학교가 운영하는 5대 핵심 직종 카테고리(무역물류, 문화콘텐츠(캐드 포함), 사무행정, 전산회계, 직업상담)에 속하는 과정들만 필터링하여 전체 대시보드에서 타 학원과 비교합니다.",
         )
         if mito_focus_global:
-            st.caption(f"💡 미토 관련 **{len(mito_jobs)}개 직종**을 운영하는 타 학원 과정들만 집중 비교합니다.")
+            st.caption("💡 미토 **5대 핵심 분야**(무역물류·문화콘텐츠·사무행정·전산회계·직업상담)를 운영하는 타 학원 과정만 비교합니다.")
     else:
         mito_focus_global = False
 
-    # ── 직종 필터 ──
-    all_jobs = sorted([j for j in df["직종명"].dropna().unique() if j])
-    selected_jobs = st.multiselect(
-        "직종(NCS) 필터",
-        options=all_jobs,
+    # ── 5대 직종 그룹 필터 ──
+    all_groups_in_df = [g for g in MITTO_JOB_GROUPS if g in df["직종그룹"].values] + [
+        g for g in df["직종그룹"].dropna().unique() if g not in MITTO_JOB_GROUPS
+    ]
+    selected_groups = st.multiselect(
+        "🗂️ 직종 그룹 필터",
+        options=all_groups_in_df,
         default=[],
-        placeholder="전체 직종",
+        placeholder="전체 직종 그룹",
+        help="5대 대표 직종 카테고리 단위로 과정을 필터링합니다.",
+    )
+
+    # ── 세부 직종(NCS) 필터 ──
+    if selected_groups:
+        avail_sub_jobs = sorted(df[df["직종그룹"].isin(selected_groups)]["직종명"].dropna().unique().tolist())
+    else:
+        avail_sub_jobs = sorted([j for j in df["직종명"].dropna().unique() if j])
+
+    selected_jobs = st.multiselect(
+        "📋 세부 직종(NCS) 필터",
+        options=avail_sub_jobs,
+        default=[],
+        placeholder="전체 세부 직종",
     )
 
     # ── 인원수 구간 필터 ──
@@ -662,8 +760,11 @@ else:
     st.warning("⚠️ 선택된 학원이 없습니다. 좌측 사이드바에서 학원을 1개 이상 선택해 주세요.")
     st.stop()
 
-if mito_focus_global and is_mito_available:
-    filtered_df = filtered_df[filtered_df["직종명"].isin(mito_jobs)]
+if mito_focus_global:
+    filtered_df = filtered_df[filtered_df["직종그룹"].isin(MITTO_JOB_GROUPS)]
+
+if selected_groups:
+    filtered_df = filtered_df[filtered_df["직종그룹"].isin(selected_groups)]
 
 if selected_jobs:
     filtered_df = filtered_df[filtered_df["직종명"].isin(selected_jobs)]
@@ -745,27 +846,38 @@ tab_job_volume, tab_competitor_match, tab_calendar_view, tab_revenue, tab_instit
 # ─────────────────────────────────────────────
 @st.fragment
 def render_job_volume_tab(df_data, mito_jobs_list, is_mito_avail):
-    st.subheader("💡 직종(NCS)별 실제 수강생 볼륨 (어디에 사람이 몰렸는가?)")
+    st.subheader("💡 직종별 실제 수강생 볼륨 (어디에 사람이 몰렸는가?)")
     st.caption("선택된 학원들 중에서 실제로 가장 많은 수강생이 등록한 시장 수요 중심 직종을 파악합니다.")
 
-    col_jv1, col_jv2 = st.columns([1.5, 3])
-    with col_jv1:
-        if is_mito_avail:
+    col_jv_ctrl1, col_jv_ctrl2 = st.columns([2, 2])
+    with col_jv_ctrl1:
+        jv_view_mode = st.radio(
+            "분석 단위 선택",
+            ["🗂️ 미토 5대 직종 그룹별 (통합)", "📋 세부 NCS 직종별"],
+            index=0,
+            horizontal=True,
+            key="jv_view_mode_radio",
+            help="미토의 5대 대표 카테고리로 묶어서 볼지, 개별 세부 NCS 직종별로 볼지 선택합니다.",
+        )
+    with col_jv_ctrl2:
+        if is_mito_avail and jv_view_mode == "📋 세부 NCS 직종별":
             jv_mito_only = st.checkbox(
-                "🎯 미토 기준 (미토 개설 직종 시장만 보기)",
+                "🎯 미토 개설 직종만 한정",
                 value=False,
                 key="jv_mito_only_box",
-                help=f"미토직업전문학교가 개설한 {len(mito_jobs_list)}개 직종에 한정하여 시장 규모를 분석합니다.",
+                help=f"미토직업전문학교가 개설한 {len(mito_jobs_list)}개 세부 직종에 한정하여 시장 규모를 분석합니다.",
             )
         else:
             jv_mito_only = False
 
-    target_job_df = df_data
+    target_job_df = df_data.copy()
     if jv_mito_only and is_mito_avail:
-        target_job_df = df_data[df_data["직종명"].isin(mito_jobs_list)]
+        target_job_df = target_job_df[target_job_df["직종명"].isin(mito_jobs_list)]
+
+    group_col = "직종그룹" if jv_view_mode == "🗂️ 미토 5대 직종 그룹별 (통합)" else "직종명"
 
     job_agg = (
-        target_job_df.groupby("직종명")
+        target_job_df.groupby(group_col)
         .agg(
             총등록인원=("등록인원", "sum"),
             개설과정수=("과정명", "count"),
@@ -780,55 +892,56 @@ def render_job_volume_tab(df_data, mito_jobs_list, is_mito_avail):
     col_j1, col_j2 = st.columns([3, 2])
 
     with col_j1:
-        st.markdown("#### 🥇 직종별 총 등록인원수 TOP 15")
-        top_jobs = job_agg.head(15)
+        chart_title = "🥇 5대 직종 그룹별 총 등록인원수" if group_col == "직종그룹" else "🥇 세부 직종별 총 등록인원수 TOP 15"
+        st.markdown(f"#### {chart_title}")
+        top_jobs = job_agg.head(15) if group_col == "직종명" else job_agg
         fig_job_bar = px.bar(
             top_jobs.sort_values("총등록인원", ascending=True),
             x="총등록인원",
-            y="직종명",
+            y=group_col,
             orientation="h",
             text="총등록인원",
             color="총등록인원",
             color_continuous_scale="Blues",
-            labels={"총등록인원": "실제 등록 인원수 (명)"},
-            height=480,
+            labels={"총등록인원": "실제 등록 인원수 (명)", group_col: "분류"},
+            height=400 if group_col == "직종그룹" else 480,
         )
         fig_job_bar.update_traces(texttemplate="%{text:,}명", textposition="outside")
         fig_job_bar.update_layout(template="plotly_white", showlegend=False)
         st.plotly_chart(fig_job_bar, use_container_width=True)
 
     with col_j2:
-        st.markdown("#### ⚡ 과정당 평균 모집 인원 TOP 10")
-        st.caption("과정 1개 열었을 때 가장 사람이 많이 모인 알짜 직종 (과정 수 2개 이상)")
+        st.markdown(f"#### ⚡ 과정당 평균 모집 인원 ({'그룹별' if group_col == '직종그룹' else 'TOP 10'})")
+        st.caption("과정 1개 열었을 때 가장 사람이 많이 모인 알짜 분야")
         efficient_jobs = (
-            job_agg[job_agg["개설과정수"] >= 2]
-            .sort_values("과정당평균인원", ascending=False)
-            .head(10)
+            job_agg.sort_values("과정당평균인원", ascending=False)
+            if group_col == "직종그룹"
+            else job_agg[job_agg["개설과정수"] >= 2].sort_values("과정당평균인원", ascending=False).head(10)
         )
         if not efficient_jobs.empty:
             fig_eff = px.bar(
                 efficient_jobs,
-                x="직종명",
+                x=group_col,
                 y="과정당평균인원",
                 text="과정당평균인원",
                 color="과정당평균인원",
                 color_continuous_scale="Teal",
-                labels={"과정당평균인원": "평균 인원(명/과정)"},
-                height=420,
+                labels={"과정당평균인원": "평균 인원(명/과정)", group_col: "분류"},
+                height=400 if group_col == "직종그룹" else 420,
             )
             fig_eff.update_traces(texttemplate="%{text:.1f}명", textposition="outside")
             fig_eff.update_layout(template="plotly_white", showlegend=False)
             st.plotly_chart(fig_eff, use_container_width=True)
         else:
-            st.caption("과정 수 2개 이상인 직종이 없습니다.")
+            st.caption("분석 대상 직종이 없습니다.")
 
     st.divider()
 
-    st.markdown("#### 📌 직종별 수강생 유입 규모 요약")
+    st.markdown("#### 📌 수강생 유입 규모 요약")
     if not job_agg.empty:
         c_top1 = job_agg.iloc[0]
         st.info(
-            f"현재 선택된 범위에서 가장 수강생이 많은 1위 직종은 **`{c_top1['직종명']}`** (총 **{c_top1['총등록인원']:,}명**, 과정 {c_top1['개설과정수']}개)이며, "
+            f"현재 선택된 범위에서 가장 수강생이 많은 1위 분야는 **`{c_top1[group_col]}`** (총 **{c_top1['총등록인원']:,}명**, 과정 {c_top1['개설과정수']}개)이며, "
             f"과정당 평균 **{c_top1['과정당평균인원']}명**이 등록되었습니다."
         )
 
@@ -843,166 +956,154 @@ def render_competitor_match_tab(df_data, mito_jobs_list, is_mito_avail, organs_s
     st.subheader("⚔️ 경쟁사 간 직종별 성과 맞대결 분석")
     st.caption("선택한 학원들 간에 **비슷하게 겹치는 직종(경쟁 직종)**을 추출하여 실제 등록 인원수, 과정당 모집 효율, 시장 점유율을 시각화로 비교합니다.")
 
-    # 직종별 x 훈련기관별 집계
-    comp_agg = (
-        df_data.groupby(["직종명", "훈련기관명"])
-        .agg(
-            등록인원=("등록인원", "sum"),
-            과정수=("과정명", "count"),
-            예상매출=("예상매출", "sum"),
-            평균훈련비=("실제훈련비", "mean"),
-        )
-        .reset_index()
-    )
-    comp_agg["과정당평균인원"] = (comp_agg["등록인원"] / comp_agg["과정수"]).round(1)
-    comp_agg["기관약칭"] = comp_agg["훈련기관명"].apply(get_short_inst_name)
-
-    # 각 직종별 개설 학원 수 계산
-    job_org_count = comp_agg.groupby("직종명")["훈련기관명"].nunique().to_dict()
-    comp_agg["개설학원수"] = comp_agg["직종명"].map(job_org_count)
-
-    # 겹치는 직종 (2개 이상 학원이 개설한 직종)
-    overlapping_jobs = sorted([j for j, count in job_org_count.items() if count >= 2])
-    all_jobs_in_data = sorted(comp_agg["직종명"].unique())
-
     # 학원별 고유 컬러 매핑 생성
     color_map = {}
     for org in df_data["훈련기관명"].unique():
         b_style = get_organ_badge_style(org)
         color_map[org] = b_style["border"]
 
-    if not overlapping_jobs and len(organs_selected) >= 2:
-        st.info("💡 현재 선택된 학원들 간에 정확히 일치하는 직종 코드가 없습니다. '전체 직종 비교'를 통해 각 학원의 개설 직종을 함께 비교할 수 있습니다.")
+    match_level = st.radio(
+        "맞대결 비교 단위 선택",
+        ["🗂️ 미토 5대 직종 그룹별 맞대결 (추천)", "📋 세부 NCS 직종별 맞대결"],
+        index=0,
+        horizontal=True,
+        key="comp_match_level_radio",
+        help="미토의 5대 대표 카테고리(무역물류, 문화콘텐츠, 사무행정, 전산회계, 직업상담)로 묶어서 학원별 성과를 비교할지, 개별 세부 NCS 직종별로 비교할지 선택합니다.",
+    )
 
-    comp_c1, comp_c2, comp_c3 = st.columns([1.3, 1.1, 2.2])
-    with comp_c1:
-        comp_mito_only = st.checkbox(
-            "🎯 미토 기준 (미토 개설 직종만)",
-            value=True if is_mito_avail else False,
-            key="comp_mito_only_box",
-            help="미토직업전문학교가 개설한 직종군에 대해서만 타 학원들과의 성과를 맞대결합니다. (미토 미개설 직종 제외)",
-        )
-    with comp_c2:
-        overlap_only = st.checkbox(
-            "⚔️ 2개 이상 학원 중복만",
-            value=True,
-            key="comp_overlap_only_box",
-            help="복수의 학원이 동시에 과정을 개설한 직종만 골라내어 직접적인 맞대결 성과를 비교합니다.",
-        )
-
-    # 미토 기준 여부에 따른 직종 풀 결정
-    if comp_mito_only and is_mito_avail:
-        base_pool = [j for j in all_jobs_in_data if j in mito_jobs_list]
-    else:
-        base_pool = all_jobs_in_data
-
-    if overlap_only:
-        filtered_overlap = [j for j in base_pool if j in overlapping_jobs]
-        available_jobs_for_filter = filtered_overlap if filtered_overlap else base_pool
-    else:
-        available_jobs_for_filter = base_pool
-
-    with comp_c3:
-        selected_compare_jobs = st.multiselect(
-            "비교할 직종 선택 (기본: 상위 경쟁 직종)",
-            options=available_jobs_for_filter,
-            default=available_jobs_for_filter[:10] if len(available_jobs_for_filter) > 10 else available_jobs_for_filter,
-            placeholder="직종을 선택하세요",
-            key="comp_multiselect_jobs",
+    # ─────────────────────────────────────────
+    # [모드 1] 🗂️ 미토 5대 직종 그룹별 맞대결
+    # ─────────────────────────────────────────
+    if match_level == "🗂️ 미토 5대 직종 그룹별 맞대결 (추천)":
+        st.info(
+            "🎯 **[미토 5대 직종 그룹 통합 비교]** 미토직업전문학교의 5대 대표 분야 "
+            "(`무역물류`, `문화콘텐츠 (캐드 포함)`, `사무행정`, `전산회계`, `직업상담`)로 관련 직종들을 모조리 묶어서 경쟁 학원들과 성과를 맞대결합니다."
         )
 
-    if not selected_compare_jobs:
-        st.warning("비교할 직종이 선택되지 않았습니다. 위에서 직종을 1개 이상 선택해 주세요.")
-    else:
-        if comp_mito_only and is_mito_avail:
-            st.info(f"🎯 **[미토직업전문학교 기준 맞대결]** 미토가 운영하는 직종을 기준으로 타 학원들과의 경쟁 성과를 비교합니다. (분석 직종 {len(selected_compare_jobs)}개)")
+        col_mg1, col_mg2 = st.columns([1.5, 2.5])
+        with col_mg1:
+            grp_mito_only = st.checkbox(
+                "🎯 미토 5대 핵심 분야만 (기타 직종 제외)",
+                value=True,
+                key="comp_grp_mito_only_box",
+                help="미토의 5대 대표 카테고리에 속하는 과정들만 분석하고 타 학원의 기타 직종(제과제빵, 바리스타, 중장비 등)은 제외합니다.",
+            )
 
-        match_df = comp_agg[comp_agg["직종명"].isin(selected_compare_jobs)].copy()
+        avail_groups = [g for g in MITTO_JOB_GROUPS if g in df_data["직종그룹"].values]
+        if not grp_mito_only:
+            other_grps = [g for g in df_data["직종그룹"].dropna().unique() if g not in MITTO_JOB_GROUPS]
+            avail_groups.extend(other_grps)
+
+        with col_mg2:
+            selected_comp_groups = st.multiselect(
+                "비교할 직종 그룹 선택",
+                options=avail_groups,
+                default=avail_groups,
+                placeholder="직종 그룹을 선택하세요",
+                key="comp_group_multiselect",
+            )
+
+        if not selected_comp_groups:
+            st.warning("비교할 직종 그룹이 선택되지 않았습니다. 위에서 그룹을 1개 이상 선택해 주세요.")
+            return
+
+        grp_match_data = df_data[df_data["직종그룹"].isin(selected_comp_groups)].copy()
+
+        # 직종그룹 x 훈련기관별 집계
+        grp_comp_agg = (
+            grp_match_data.groupby(["직종그룹", "훈련기관명"])
+            .agg(
+                등록인원=("등록인원", "sum"),
+                과정수=("과정명", "count"),
+                예상매출=("예상매출", "sum"),
+                평균훈련비=("실제훈련비", "mean"),
+            )
+            .reset_index()
+        )
+        grp_comp_agg["과정당평균인원"] = (grp_comp_agg["등록인원"] / grp_comp_agg["과정수"]).round(1)
+        grp_comp_agg["기관약칭"] = grp_comp_agg["훈련기관명"].apply(get_short_inst_name)
 
         # 핵심 요약 KPI
-        kpi_m1, kpi_m2, kpi_m3 = st.columns(3)
-        with kpi_m1:
-            st.metric("⚔️ 분석 대상 직종 수", f"{len(selected_compare_jobs):,}개")
-        with kpi_m2:
-            st.metric("👥 비교 직종 총 수강생", f"{match_df['등록인원'].sum():,}명")
-        with kpi_m3:
-            top_contested = max(selected_compare_jobs, key=lambda j: job_org_count.get(j, 0))
-            st.metric(
-                "🔥 최대 격전 직종",
-                f"{top_contested}",
-                f"{job_org_count.get(top_contested, 0)}개 학원 동시 경쟁",
+        kpi_g1, kpi_g2, kpi_g3 = st.columns(3)
+        with kpi_g1:
+            st.metric("🗂️ 분석 직종 그룹 수", f"{len(selected_comp_groups):,}개 분야")
+        with kpi_g2:
+            st.metric("👥 비교 그룹 총 수강생", f"{grp_comp_agg['등록인원'].sum():,}명")
+        with kpi_g3:
+            top_grp_row = (
+                grp_comp_agg.groupby("직종그룹")["등록인원"].sum().sort_values(ascending=False)
             )
+            top_grp_name = top_grp_row.index[0] if not top_grp_row.empty else "-"
+            top_grp_val = top_grp_row.iloc[0] if not top_grp_row.empty else 0
+            st.metric("🔥 최대 수강생 분야", f"{top_grp_name}", f"총 {top_grp_val:,}명 등록")
 
         st.divider()
 
-        # 시각화 1: 직종별 학원별 등록인원 비교 (Grouped Bar)
-        st.markdown("#### 📊 1. 직종별 학원별 등록 인원수 맞대결 (볼륨 비교)")
-        st.caption("비슷한 직종에서 어떤 학원이 실제 수강생을 더 많이 유치했는지 한눈에 비교합니다.")
+        # 시각화 1: 5대 직종 그룹별 학원 등록 인원수 맞대결
+        st.markdown("#### 📊 1. 5대 직종 그룹별 학원 등록 인원수 맞대결 (시장 볼륨)")
+        st.caption("미토와 타 학원들이 5대 대표 분야에서 각각 몇 명의 수강생을 모집했는지 정면 비교합니다.")
 
-        fig_comp_bar = px.bar(
-            match_df,
-            x="직종명",
+        fig_grp_bar = px.bar(
+            grp_comp_agg,
+            x="직종그룹",
             y="등록인원",
             color="훈련기관명",
             barmode="group",
             text="등록인원",
             color_discrete_map=color_map,
-            labels={"등록인원": "실제 등록 인원수 (명)", "직종명": "직종(NCS)", "훈련기관명": "학원명"},
+            labels={"등록인원": "실제 등록 인원수 (명)", "직종그룹": "직종 그룹", "훈련기관명": "학원명"},
             height=460,
         )
-        fig_comp_bar.update_traces(texttemplate="%{text}명", textposition="outside")
-        fig_comp_bar.update_layout(
+        fig_grp_bar.update_traces(texttemplate="%{text:,}명", textposition="outside")
+        fig_grp_bar.update_layout(
             template="plotly_white",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            xaxis_tickangle=-25,
         )
-        st.plotly_chart(fig_comp_bar, use_container_width=True)
+        st.plotly_chart(fig_grp_bar, use_container_width=True)
 
-        col_sub1, col_sub2 = st.columns(2)
+        col_gsub1, col_gsub2 = st.columns(2)
 
-        with col_sub1:
-            # 시각화 2: 과정당 평균 모집 인원 비교 (효율성)
-            st.markdown("#### ⚡ 2. 직종별 과정당 평균 모집 인원 (모집 체급)")
-            st.caption("과정 1개를 열었을 때 누가 더 꽉 채워 모집했는지 효율을 비교합니다.")
-            fig_eff_bar = px.bar(
-                match_df,
-                x="직종명",
+        with col_gsub1:
+            # 시각화 2: 직종 그룹별 과정당 평균 모집 인원 (체급/효율성)
+            st.markdown("#### ⚡ 2. 직종 그룹별 과정당 평균 모집 인원 (모집 체급)")
+            st.caption("과정 1개를 열었을 때 어느 학원이 더 알차게 인원을 꽉 채워 모집했는지 효율을 비교합니다.")
+            fig_grp_eff = px.bar(
+                grp_comp_agg,
+                x="직종그룹",
                 y="과정당평균인원",
                 color="훈련기관명",
                 barmode="group",
                 text="과정당평균인원",
                 color_discrete_map=color_map,
-                labels={"과정당평균인원": "과정당 평균 인원 (명/과정)", "직종명": "직종(NCS)", "훈련기관명": "학원명"},
+                labels={"과정당평균인원": "과정당 평균 인원 (명/과정)", "직종그룹": "직종 그룹", "훈련기관명": "학원명"},
                 height=420,
             )
-            fig_eff_bar.update_traces(texttemplate="%{text:.1f}명", textposition="outside")
-            fig_eff_bar.update_layout(
+            fig_grp_eff.update_traces(texttemplate="%{text:.1f}명", textposition="outside")
+            fig_grp_eff.update_layout(
                 template="plotly_white",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                xaxis_tickangle=-25,
             )
-            st.plotly_chart(fig_eff_bar, use_container_width=True)
+            st.plotly_chart(fig_grp_eff, use_container_width=True)
 
-        with col_sub2:
-            # 시각화 3: 단일 직종 심층 점유율 분석
-            st.markdown("#### 🥧 3. 격전 직종별 수강생 점유율 심층 분석")
+        with col_gsub2:
+            # 시각화 3: 단일 직종 그룹 심층 점유율 분석
+            st.markdown("#### 🥧 3. 직종 그룹별 수강생 점유율 심층 분석")
 
-            # 선택 가능한 직종 목록에서 현재 선택값 유효성 체크
-            prev_deep_job = st.session_state.get("deep_comp_job_select")
-            default_deep_idx = 0
-            if prev_deep_job in selected_compare_jobs:
-                default_deep_idx = selected_compare_jobs.index(prev_deep_job)
+            prev_deep_grp = st.session_state.get("deep_comp_grp_select")
+            default_deep_grp_idx = 0
+            if prev_deep_grp in selected_comp_groups:
+                default_deep_grp_idx = selected_comp_groups.index(prev_deep_grp)
 
-            target_deep_job = st.selectbox(
-                "점유율을 확인할 직종 선택",
-                options=selected_compare_jobs,
-                index=default_deep_idx,
-                key="deep_comp_job_select",
+            target_deep_grp = st.selectbox(
+                "점유율을 확인할 직종 그룹 선택",
+                options=selected_comp_groups,
+                index=default_deep_grp_idx,
+                key="deep_comp_grp_select",
             )
-            deep_df = comp_agg[comp_agg["직종명"] == target_deep_job]
+            deep_grp_df = grp_comp_agg[grp_comp_agg["직종그룹"] == target_deep_grp]
 
-            fig_deep_pie = px.pie(
-                deep_df,
+            fig_deep_grp_pie = px.pie(
+                deep_grp_df,
                 names="훈련기관명",
                 values="등록인원",
                 hole=0.4,
@@ -1010,27 +1111,225 @@ def render_competitor_match_tab(df_data, mito_jobs_list, is_mito_avail, organs_s
                 color_discrete_map=color_map,
                 height=360,
             )
-            fig_deep_pie.update_traces(textinfo="percent+label")
-            fig_deep_pie.update_layout(showlegend=False)
-            st.plotly_chart(fig_deep_pie, use_container_width=True)
+            fig_deep_grp_pie.update_traces(textinfo="percent+label")
+            fig_deep_grp_pie.update_layout(showlegend=False)
+            st.plotly_chart(fig_deep_grp_pie, use_container_width=True)
 
         st.divider()
 
         # 상세 크로스 피벗 성과표
-        st.markdown("#### 📋 4. 직종 × 학원 등록인원 크로스 성과표")
-        st.caption("각 직종별로 학원들이 몇 명의 수강생을 모집했고, 과정 1개당 평균 몇 명을 유치했는지 교차 집계합니다.")
+        st.markdown("#### 📋 4. 직종 그룹 × 학원 등록인원 크로스 성과표")
+        st.caption("각 직종 그룹별로 학원들이 몇 명의 수강생을 모집했고, 과정 1개당 평균 몇 명을 유치했는지 교차 집계합니다.")
 
-        pivot_count = match_df.pivot(index="직종명", columns="훈련기관명", values="등록인원").fillna(0).astype(int)
-        pivot_avg = match_df.pivot(index="직종명", columns="훈련기관명", values="과정당평균인원").fillna(0).round(1)
+        pivot_grp_count = grp_comp_agg.pivot(index="직종그룹", columns="훈련기관명", values="등록인원").fillna(0).astype(int)
+        pivot_grp_avg = grp_comp_agg.pivot(index="직종그룹", columns="훈련기관명", values="과정당평균인원").fillna(0).round(1)
 
-        pivot_display = pd.DataFrame(index=pivot_count.index)
-        for col in pivot_count.columns:
-            pivot_display[col] = [
+        pivot_grp_display = pd.DataFrame(index=pivot_grp_count.index)
+        for col in pivot_grp_count.columns:
+            pivot_grp_display[col] = [
                 f"{c:,}명 (과정당 {a}명)" if c > 0 else "-"
-                for c, a in zip(pivot_count[col], pivot_avg[col])
+                for c, a in zip(pivot_grp_count[col], pivot_grp_avg[col])
             ]
 
-        st.dataframe(pivot_display, use_container_width=True)
+        st.dataframe(pivot_grp_display, use_container_width=True)
+
+        # 5대 직종 그룹 상세 매핑 안내
+        with st.expander("ℹ️ 미토 5대 직종 그룹 분류 기준 상세 안내"):
+            st.markdown(
+                """
+                - **📦 무역물류**: `수출입관리`, `운송관리`, `물류관리`, `유통관리`, 무역영어, 국제무역사, 물류관리사, 해상물류 등
+                - **🎨 문화콘텐츠 (캐드 포함)**: **CAD 도면/설계**, 실내건축/실내디자인, 건축제도, `광고콘텐츠제작`, `UI/UX엔지니어링`, `스마트문화앱콘텐츠제작`, `디지털디자인`, `애니메이션콘텐츠제작`, `응용SW엔지니어링`(파이썬/AI), 웹퍼블리셔, 영상편집(유튜브/프리미어) 등
+                - **📁 사무행정**: `사무행정`, 컴퓨터활용능력(컴활 1급/2급), OA, ITQ, 비서, 총무 등
+                - **📊 전산회계**: `회계·감사`, 세무, 전산회계 1급, 전산세무 2급, 재경관리사, FAT, TAT, ERP회계 등
+                - **🤝 직업상담**: `직업상담`, 직업상담사 1급/2급, 취업지원 실무 등
+                """
+            )
+
+    # ─────────────────────────────────────────
+    # [모드 2] 📋 세부 NCS 직종별 맞대결
+    # ─────────────────────────────────────────
+    else:
+        # 직종별 x 훈련기관별 집계
+        comp_agg = (
+            df_data.groupby(["직종명", "훈련기관명"])
+            .agg(
+                등록인원=("등록인원", "sum"),
+                과정수=("과정명", "count"),
+                예상매출=("예상매출", "sum"),
+                평균훈련비=("실제훈련비", "mean"),
+            )
+            .reset_index()
+        )
+        comp_agg["과정당평균인원"] = (comp_agg["등록인원"] / comp_agg["과정수"]).round(1)
+        comp_agg["기관약칭"] = comp_agg["훈련기관명"].apply(get_short_inst_name)
+
+        # 각 직종별 개설 학원 수 계산
+        job_org_count = comp_agg.groupby("직종명")["훈련기관명"].nunique().to_dict()
+        comp_agg["개설학원수"] = comp_agg["직종명"].map(job_org_count)
+
+        # 겹치는 직종 (2개 이상 학원이 개설한 직종)
+        overlapping_jobs = sorted([j for j, count in job_org_count.items() if count >= 2])
+        all_jobs_in_data = sorted(comp_agg["직종명"].unique())
+
+        if not overlapping_jobs and len(organs_selected) >= 2:
+            st.info("💡 현재 선택된 학원들 간에 정확히 일치하는 직종 코드가 없습니다. '전체 직종 비교'를 통해 각 학원의 개설 직종을 함께 비교할 수 있습니다.")
+
+        comp_c1, comp_c2, comp_c3 = st.columns([1.3, 1.1, 2.2])
+        with comp_c1:
+            comp_mito_only = st.checkbox(
+                "🎯 미토 기준 (미토 개설 직종만)",
+                value=True if is_mito_avail else False,
+                key="comp_mito_only_box",
+                help="미토직업전문학교가 개설한 직종군에 대해서만 타 학원들과의 성과를 맞대결합니다. (미토 미개설 직종 제외)",
+            )
+        with comp_c2:
+            overlap_only = st.checkbox(
+                "⚔️ 2개 이상 학원 중복만",
+                value=True,
+                key="comp_overlap_only_box",
+                help="복수의 학원이 동시에 과정을 개설한 직종만 골라내어 직접적인 맞대결 성과를 비교합니다.",
+            )
+
+        # 미토 기준 여부에 따른 직종 풀 결정
+        if comp_mito_only and is_mito_avail:
+            base_pool = [j for j in all_jobs_in_data if j in mito_jobs_list]
+        else:
+            base_pool = all_jobs_in_data
+
+        if overlap_only:
+            filtered_overlap = [j for j in base_pool if j in overlapping_jobs]
+            available_jobs_for_filter = filtered_overlap if filtered_overlap else base_pool
+        else:
+            available_jobs_for_filter = base_pool
+
+        with comp_c3:
+            selected_compare_jobs = st.multiselect(
+                "비교할 직종 선택 (기본: 상위 경쟁 직종)",
+                options=available_jobs_for_filter,
+                default=available_jobs_for_filter[:10] if len(available_jobs_for_filter) > 10 else available_jobs_for_filter,
+                placeholder="직종을 선택하세요",
+                key="comp_multiselect_jobs",
+            )
+
+        if not selected_compare_jobs:
+            st.warning("비교할 직종이 선택되지 않았습니다. 위에서 직종을 1개 이상 선택해 주세요.")
+        else:
+            if comp_mito_only and is_mito_avail:
+                st.info(f"🎯 **[미토직업전문학교 기준 맞대결]** 미토가 운영하는 직종을 기준으로 타 학원들과의 경쟁 성과를 비교합니다. (분석 직종 {len(selected_compare_jobs)}개)")
+
+            match_df = comp_agg[comp_agg["직종명"].isin(selected_compare_jobs)].copy()
+
+            # 핵심 요약 KPI
+            kpi_m1, kpi_m2, kpi_m3 = st.columns(3)
+            with kpi_m1:
+                st.metric("⚔️ 분석 대상 직종 수", f"{len(selected_compare_jobs):,}개")
+            with kpi_m2:
+                st.metric("👥 비교 직종 총 수강생", f"{match_df['등록인원'].sum():,}명")
+            with kpi_m3:
+                top_contested = max(selected_compare_jobs, key=lambda j: job_org_count.get(j, 0))
+                st.metric(
+                    "🔥 최대 격전 직종",
+                    f"{top_contested}",
+                    f"{job_org_count.get(top_contested, 0)}개 학원 동시 경쟁",
+                )
+
+            st.divider()
+
+            # 시각화 1: 직종별 학원별 등록인원 비교 (Grouped Bar)
+            st.markdown("#### 📊 1. 직종별 학원별 등록 인원수 맞대결 (볼륨 비교)")
+            st.caption("비슷한 직종에서 어떤 학원이 실제 수강생을 더 많이 유치했는지 한눈에 비교합니다.")
+
+            fig_comp_bar = px.bar(
+                match_df,
+                x="직종명",
+                y="등록인원",
+                color="훈련기관명",
+                barmode="group",
+                text="등록인원",
+                color_discrete_map=color_map,
+                labels={"등록인원": "실제 등록 인원수 (명)", "직종명": "직종(NCS)", "훈련기관명": "학원명"},
+                height=460,
+            )
+            fig_comp_bar.update_traces(texttemplate="%{text}명", textposition="outside")
+            fig_comp_bar.update_layout(
+                template="plotly_white",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                xaxis_tickangle=-25,
+            )
+            st.plotly_chart(fig_comp_bar, use_container_width=True)
+
+            col_sub1, col_sub2 = st.columns(2)
+
+            with col_sub1:
+                # 시각화 2: 과정당 평균 모집 인원 비교 (효율성)
+                st.markdown("#### ⚡ 2. 직종별 과정당 평균 모집 인원 (모집 체급)")
+                st.caption("과정 1개를 열었을 때 누가 더 꽉 채워 모집했는지 효율을 비교합니다.")
+                fig_eff_bar = px.bar(
+                    match_df,
+                    x="직종명",
+                    y="과정당평균인원",
+                    color="훈련기관명",
+                    barmode="group",
+                    text="과정당평균인원",
+                    color_discrete_map=color_map,
+                    labels={"과정당평균인원": "과정당 평균 인원 (명/과정)", "직종명": "직종(NCS)", "훈련기관명": "학원명"},
+                    height=420,
+                )
+                fig_eff_bar.update_traces(texttemplate="%{text:.1f}명", textposition="outside")
+                fig_eff_bar.update_layout(
+                    template="plotly_white",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    xaxis_tickangle=-25,
+                )
+                st.plotly_chart(fig_eff_bar, use_container_width=True)
+
+            with col_sub2:
+                # 시각화 3: 단일 직종 심층 점유율 분석
+                st.markdown("#### 🥧 3. 격전 직종별 수강생 점유율 심층 분석")
+
+                prev_deep_job = st.session_state.get("deep_comp_job_select")
+                default_deep_idx = 0
+                if prev_deep_job in selected_compare_jobs:
+                    default_deep_idx = selected_compare_jobs.index(prev_deep_job)
+
+                target_deep_job = st.selectbox(
+                    "점유율을 확인할 직종 선택",
+                    options=selected_compare_jobs,
+                    index=default_deep_idx,
+                    key="deep_comp_job_select",
+                )
+                deep_df = comp_agg[comp_agg["직종명"] == target_deep_job]
+
+                fig_deep_pie = px.pie(
+                    deep_df,
+                    names="훈련기관명",
+                    values="등록인원",
+                    hole=0.4,
+                    color="훈련기관명",
+                    color_discrete_map=color_map,
+                    height=360,
+                )
+                fig_deep_pie.update_traces(textinfo="percent+label")
+                fig_deep_pie.update_layout(showlegend=False)
+                st.plotly_chart(fig_deep_pie, use_container_width=True)
+
+            st.divider()
+
+            # 상세 크로스 피벗 성과표
+            st.markdown("#### 📋 4. 직종 × 학원 등록인원 크로스 성과표")
+            st.caption("각 직종별로 학원들이 몇 명의 수강생을 모집했고, 과정 1개당 평균 몇 명을 유치했는지 교차 집계합니다.")
+
+            pivot_count = match_df.pivot(index="직종명", columns="훈련기관명", values="등록인원").fillna(0).astype(int)
+            pivot_avg = match_df.pivot(index="직종명", columns="훈련기관명", values="과정당평균인원").fillna(0).round(1)
+
+            pivot_display = pd.DataFrame(index=pivot_count.index)
+            for col in pivot_count.columns:
+                pivot_display[col] = [
+                    f"{c:,}명 (과정당 {a}명)" if c > 0 else "-"
+                    for c, a in zip(pivot_count[col], pivot_avg[col])
+                ]
+
+            st.dataframe(pivot_display, use_container_width=True)
 
 with tab_competitor_match:
     render_competitor_match_tab(filtered_df, mito_jobs, is_mito_available, selected_organs)
@@ -1076,7 +1375,10 @@ def render_calendar_tab(cal_base_df, mito_jobs_list, is_mito_avail, organs_selec
             cal_jobs = sorted([j for j in cal_base_df["직종명"].dropna().unique() if j])
             cal_options = ["전체 직종"]
             if is_mito_avail:
-                cal_options.append("🎯 [미토 기준] 미토 개설 직종 전체")
+                cal_options.append("🎯 [미토 기준] 5대 직종군 전체")
+            for grp in MITTO_JOB_GROUPS:
+                if grp in cal_base_df["직종그룹"].values:
+                    cal_options.append(f"🗂️ [그룹] {grp}")
             cal_options.extend(cal_jobs)
 
             selected_cal_job = st.selectbox(
@@ -1088,8 +1390,11 @@ def render_calendar_tab(cal_base_df, mito_jobs_list, is_mito_avail, organs_selec
 
         # 캘린더 표시 대상 필터링
         cal_display_df = cal_base_df[cal_base_df["개강월"] == selected_month].copy()
-        if selected_cal_job == "🎯 [미토 기준] 미토 개설 직종 전체":
-            cal_display_df = cal_display_df[cal_display_df["직종명"].isin(mito_jobs_list)]
+        if selected_cal_job == "🎯 [미토 기준] 5대 직종군 전체":
+            cal_display_df = cal_display_df[cal_display_df["직종그룹"].isin(MITTO_JOB_GROUPS)]
+        elif selected_cal_job.startswith("🗂️ [그룹] "):
+            grp_name = selected_cal_job.replace("🗂️ [그룹] ", "")
+            cal_display_df = cal_display_df[cal_display_df["직종그룹"] == grp_name]
         elif selected_cal_job != "전체 직종":
             cal_display_df = cal_display_df[cal_display_df["직종명"] == selected_cal_job]
 
@@ -1225,6 +1530,7 @@ def render_calendar_tab(cal_base_df, mito_jobs_list, is_mito_avail, organs_selec
                     {
                         "훈련기관": getattr(c, "훈련기관명"),
                         "과정명": getattr(c, "과정명"),
+                        "직종그룹": getattr(c, "직종그룹", ""),
                         "직종명": getattr(c, "직종명"),
                         "등록인원": getattr(c, "등록인원"),
                         "훈련시작일": getattr(c, "훈련시작일"),
@@ -1466,6 +1772,7 @@ with tab_data:
             [
                 "훈련기관명",
                 "과정명",
+                "직종그룹",
                 "직종명",
                 "등록인원",
                 "인원구분",
