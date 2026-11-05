@@ -609,6 +609,24 @@ with st.sidebar:
     )
     st.session_state.selected_organs = selected_organs
 
+    # ── 미토 개설 직종 사전 파악 ──
+    mito_courses = df[df["훈련기관명"].str.contains("미토", na=False)]
+    mito_jobs = sorted([j for j in mito_courses["직종명"].dropna().unique() if j and j != "기타직종"])
+    is_mito_available = len(mito_jobs) > 0
+
+    # ── 분석 관점 (미토 기준) ──
+    st.subheader("🎯 분석 관점 설정")
+    if is_mito_available:
+        mito_focus_global = st.toggle(
+            "🎯 미토직업전문학교 기준 (미토 관련 직종만)",
+            value=True,
+            help=f"미토직업전문학교가 개설한 {len(mito_jobs)}개 직종에 속하는 과정들만 필터링하여 전체 대시보드(KPI, 차트, 캘린더 등)에서 타 학원과 비교합니다.",
+        )
+        if mito_focus_global:
+            st.caption(f"💡 미토 관련 **{len(mito_jobs)}개 직종**을 운영하는 타 학원 과정들만 집중 비교합니다.")
+    else:
+        mito_focus_global = False
+
     # ── 직종 필터 ──
     all_jobs = sorted([j for j in df["직종명"].dropna().unique() if j])
     selected_jobs = st.multiselect(
@@ -643,6 +661,9 @@ if selected_organs:
 else:
     st.warning("⚠️ 선택된 학원이 없습니다. 좌측 사이드바에서 학원을 1개 이상 선택해 주세요.")
     st.stop()
+
+if mito_focus_global and is_mito_available:
+    filtered_df = filtered_df[filtered_df["직종명"].isin(mito_jobs)]
 
 if selected_jobs:
     filtered_df = filtered_df[filtered_df["직종명"].isin(selected_jobs)]
@@ -726,8 +747,24 @@ with tab_job_volume:
     st.subheader("💡 직종(NCS)별 실제 수강생 볼륨 (어디에 사람이 몰렸는가?)")
     st.caption("선택된 학원들 중에서 실제로 가장 많은 수강생이 등록한 시장 수요 중심 직종을 파악합니다.")
 
+    col_jv1, col_jv2 = st.columns([1.5, 3])
+    with col_jv1:
+        if is_mito_available:
+            jv_mito_only = st.checkbox(
+                "🎯 미토 기준 (미토 개설 직종 시장만 보기)",
+                value=False,
+                key="jv_mito_only_box",
+                help=f"미토직업전문학교가 개설한 {len(mito_jobs)}개 직종에 한정하여 시장 규모를 분석합니다.",
+            )
+        else:
+            jv_mito_only = False
+
+    target_job_df = filtered_df
+    if jv_mito_only and is_mito_available:
+        target_job_df = filtered_df[filtered_df["직종명"].isin(mito_jobs)]
+
     job_agg = (
-        filtered_df.groupby("직종명")
+        target_job_df.groupby("직종명")
         .agg(
             총등록인원=("등록인원", "sum"),
             개설과정수=("과정명", "count"),
@@ -832,18 +869,35 @@ with tab_competitor_match:
     if not overlapping_jobs and len(selected_organs) >= 2:
         st.info("💡 현재 선택된 학원들 간에 정확히 일치하는 직종 코드가 없습니다. '전체 직종 비교'를 통해 각 학원의 개설 직종을 함께 비교할 수 있습니다.")
 
-    comp_c1, comp_c2 = st.columns([1, 2])
+    comp_c1, comp_c2, comp_c3 = st.columns([1.3, 1.1, 2.2])
     with comp_c1:
-        default_overlap = True if overlapping_jobs else False
+        comp_mito_only = st.checkbox(
+            "🎯 미토 기준 (미토 개설 직종만)",
+            value=True if is_mito_available else False,
+            key="comp_mito_only_box",
+            help="미토직업전문학교가 개설한 직종군에 대해서만 타 학원들과의 성과를 맞대결합니다. (미토 미개설 직종 제외)",
+        )
+    with comp_c2:
         overlap_only = st.checkbox(
-            "⚔️ 2개 이상 학원이 겹치는 '경쟁 직종'만 보기",
-            value=default_overlap,
+            "⚔️ 2개 이상 학원 중복만",
+            value=True,
+            key="comp_overlap_only_box",
             help="복수의 학원이 동시에 과정을 개설한 직종만 골라내어 직접적인 맞대결 성과를 비교합니다.",
         )
 
-    available_jobs_for_filter = overlapping_jobs if overlap_only else all_jobs_in_data
+    # 미토 기준 여부에 따른 직종 풀 결정
+    if comp_mito_only and is_mito_available:
+        base_pool = [j for j in all_jobs_in_data if j in mito_jobs]
+    else:
+        base_pool = all_jobs_in_data
 
-    with comp_c2:
+    if overlap_only:
+        filtered_overlap = [j for j in base_pool if j in overlapping_jobs]
+        available_jobs_for_filter = filtered_overlap if filtered_overlap else base_pool
+    else:
+        available_jobs_for_filter = base_pool
+
+    with comp_c3:
         selected_compare_jobs = st.multiselect(
             "비교할 직종 선택 (기본: 상위 경쟁 직종)",
             options=available_jobs_for_filter,
@@ -854,6 +908,9 @@ with tab_competitor_match:
     if not selected_compare_jobs:
         st.warning("비교할 직종이 선택되지 않았습니다. 위에서 직종을 1개 이상 선택해 주세요.")
     else:
+        if comp_mito_only and is_mito_available:
+            st.info(f"🎯 **[미토직업전문학교 기준 맞대결]** 미토가 운영하는 직종을 기준으로 타 학원들과의 경쟁 성과를 비교합니다. (분석 직종 {len(selected_compare_jobs)}개)")
+
         match_df = comp_agg[comp_agg["직종명"].isin(selected_compare_jobs)].copy()
 
         # 핵심 요약 KPI
@@ -998,15 +1055,22 @@ with tab_calendar_view:
         with ctrl_c3:
             # 캘린더 내 추가 직종 필터
             cal_jobs = sorted([j for j in cal_base_df["직종명"].dropna().unique() if j])
+            cal_options = ["전체 직종"]
+            if is_mito_available:
+                cal_options.append("🎯 [미토 기준] 미토 개설 직종 전체")
+            cal_options.extend(cal_jobs)
+
             selected_cal_job = st.selectbox(
                 "직종별 일정 필터",
-                options=["전체 직종"] + cal_jobs,
-                index=0,
+                options=cal_options,
+                index=1 if is_mito_available else 0,
             )
 
         # 캘린더 표시 대상 필터링
         cal_display_df = cal_base_df[cal_base_df["개강월"] == selected_month].copy()
-        if selected_cal_job != "전체 직종":
+        if selected_cal_job == "🎯 [미토 기준] 미토 개설 직종 전체":
+            cal_display_df = cal_display_df[cal_display_df["직종명"].isin(mito_jobs)]
+        elif selected_cal_job != "전체 직종":
             cal_display_df = cal_display_df[cal_display_df["직종명"] == selected_cal_job]
 
         # 학원별 색상 범례 (Legend) 표시
@@ -1285,8 +1349,24 @@ with tab_institution:
     st.subheader("🏫 훈련기관별 실제 수강생 모집력 랭킹")
     st.caption("선택한 학원들의 '실제 등록 인원수' 총합과 '과정당 평균 인원'으로 실제 모집 체급을 비교합니다.")
 
+    if is_mito_available:
+        col_inst_c1, _ = st.columns([1.5, 2.5])
+        with col_inst_c1:
+            inst_mito_only = st.checkbox(
+                "🎯 미토 기준 (미토 개설 직종 시장 점유율만 보기)",
+                value=False,
+                key="inst_mito_only_box",
+                help=f"미토직업전문학교가 개설한 {len(mito_jobs)}개 직종 시장 내에서 각 학원의 점유율을 분석합니다.",
+            )
+    else:
+        inst_mito_only = False
+
+    target_org_df = filtered_df
+    if inst_mito_only and is_mito_available:
+        target_org_df = filtered_df[filtered_df["직종명"].isin(mito_jobs)]
+
     org_agg = (
-        filtered_df.groupby("훈련기관명")
+        target_org_df.groupby("훈련기관명")
         .agg(
             총등록인원=("등록인원", "sum"),
             개설과정수=("과정명", "count"),
