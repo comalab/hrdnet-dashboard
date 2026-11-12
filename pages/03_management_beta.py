@@ -206,7 +206,8 @@ st.markdown(
 INST_MAP = {
     "미토직업전문학교": "미토",
     "양정인력개발센터": "양정",
-    "부산예일직업전문학교": "예일",
+    "에스유평생교육원": "에스유(구 예일)",
+    "부산예일직업전문학교": "에스유(구 예일)",
     "미래창조평생교육원": "미창",
     "정연화의료서비스아카데미전문학원": "정연화",
     "그린컴퓨터아카데미 부산": "그린",
@@ -238,7 +239,7 @@ def get_organ_badge_style(organ_name: str) -> dict:
         return {"bg": "#dcfce7", "text": "#166534", "border": "#22c55e", "tag": tag}
     elif "양정" in organ_name:
         return {"bg": "#dbeafe", "text": "#1e40af", "border": "#3b82f6", "tag": tag}
-    elif "예일" in organ_name:
+    elif "예일" in organ_name or "에스유" in organ_name:
         return {"bg": "#f3e8ff", "text": "#6b21a8", "border": "#a855f7", "tag": tag}
     elif "그린" in organ_name:
         return {"bg": "#ffedd5", "text": "#9a3412", "border": "#f97316", "tag": tag}
