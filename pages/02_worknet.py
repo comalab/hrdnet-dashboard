@@ -157,15 +157,32 @@ def crawl_courses(keyword: str) -> list:
 inst_map = {
     "양정인력개발센터": "양정",
     "미토직업전문학교": "미토",
-    "부산예일직업전문학교": "예일",
+    "에스유평생교육원": "에스유(구 예일)",
+    "부산예일직업전문학교": "에스유(구 예일)",
     "미래창조평생교육원": "미창",
     "정연화의료서비스아카데미전문학원": "정연화",
     "그린컴퓨터아카데미 부산": "그린",
-    "엠비씨(MBC)아카데미 컴퓨터교육센터 화곡점" : "엠비씨",
-    "엠아카데미컴퓨터아트학원" : "엠아",
-    "동성인재개발교육원" : "동성",
-    "성심미용예술직업전문학교" : "성심"
+    "그린컴퓨터아카데미": "그린",
+    "엠비씨(MBC)아카데미 컴퓨터교육센터 화곡점": "엠비씨",
+    "엠아카데미컴퓨터아트학원": "엠아",
+    "동성인재개발교육원": "동성",
+    "성심미용예술직업전문학교": "성심",
 }
+
+
+def get_inst_short_name(inst_raw: str) -> str:
+    """훈련기관명을 축약 명칭으로 변환 (완전 일치 및 부분 일치 지원)"""
+    if not inst_raw:
+        return ""
+    name = str(inst_raw).strip()
+    if name in inst_map:
+        return inst_map[name]
+    for k, v in inst_map.items():
+        if k in name:
+            return v
+    if "에스유" in name or "예일" in name:
+        return "에스유(구 예일)"
+    return name
 
 MITO_INST_NAME = "미토직업전문학교"
 MITO_TOP_RANK = 5  # 부정훈련 신고 대비: 1~5등 내 미토 과정이 3개 이상이면 조정 필요
@@ -204,7 +221,7 @@ def generate_report(df: pd.DataFrame, keywords: list) -> str:
         if not kw_df.empty:
             for i, row in enumerate(kw_df.itertuples(), 1):
                 s = row.시작일자 if row.시작일자 else "날짜확인불가"
-                inst_name = inst_map.get(row.훈련기관, row.훈련기관)  # 매핑 적용
+                inst_name = get_inst_short_name(row.훈련기관)  # 매핑 적용
                 is_mito = row.훈련기관 == MITO_INST_NAME
                 tag_suffix = (
                     f" ({row.과정구분})" if is_mito and getattr(row, "과정구분", "") else ""
